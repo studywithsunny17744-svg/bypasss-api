@@ -266,7 +266,7 @@ export default function App() {
       }
       const interval = setInterval(() => {
         fetchDashboardData(apiKey);
-      }, 20000);
+      }, 2000);
       return () => clearInterval(interval);
     }
   }, [apiKey]);
