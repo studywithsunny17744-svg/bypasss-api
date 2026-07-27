@@ -61,15 +61,45 @@ const defaultDb = (): DatabaseSchema => ({
 
 export function loadDb(): DatabaseSchema {
   try {
+    let rawData: any = {};
+    let shouldSave = false;
     if (!fs.existsSync(config.dbPath)) {
-      return defaultDb();
+      rawData = defaultDb();
+      shouldSave = true;
+    } else {
+      const raw = fs.readFileSync(config.dbPath, 'utf8');
+      rawData = JSON.parse(raw);
     }
-    const raw = fs.readFileSync(config.dbPath, 'utf8');
-    const data = JSON.parse(raw);
     
     // Normalize data structures
     const base = defaultDb();
-    return { ...base, ...data };
+    const db = { ...base, ...rawData };
+
+    if (config.masterApiKey) {
+      if (!db.api_keys) {
+        db.api_keys = {};
+        shouldSave = true;
+      }
+      if (!db.api_keys[config.masterApiKey]) {
+        db.api_keys[config.masterApiKey] = {
+          owner_id: config.masterAdminId,
+          created_at: new Date().toISOString(),
+          requests_count: 0,
+          is_active: true,
+          max_uids: 99999,
+          uids: {},
+          username: 'admin',
+          displayName: 'Master Administrator'
+        };
+        shouldSave = true;
+      }
+    }
+
+    if (shouldSave) {
+      fs.writeFileSync(config.dbPath, JSON.stringify(db, null, 4), 'utf8');
+    }
+
+    return db;
   } catch (err) {
     console.error('Error reading/parsing database.json:', err);
     return defaultDb();

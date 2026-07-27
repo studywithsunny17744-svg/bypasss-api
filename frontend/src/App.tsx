@@ -1602,19 +1602,19 @@ export default function App() {
                                   <td>
                                     <div style={{ display: 'flex', gap: '6px' }}>
                                       <button className="btn-neon" style={{ padding: '4px 6px', fontSize: '10px' }} onClick={() => handleToggleReseller(res.key)}>
-                                        TOGGLE
+                                        Toggle Status
                                       </button>
                                       <button className="btn-neon btn-neon-purple" style={{ padding: '4px 6px', fontSize: '10px' }} onClick={() => handleUpdateResellerPassword(res.key, res.password)}>
-                                        PASS
+                                        Change Password
                                       </button>
                                       <button className="btn-neon btn-neon-green" style={{ padding: '4px 6px', fontSize: '10px' }} onClick={() => handleUpdateResellerCredits(res.key, res.credits)}>
-                                        COINS
+                                        Adjust Credits
                                       </button>
                                       <button className="btn-neon btn-neon-purple" style={{ padding: '4px 6px', fontSize: '10px' }} onClick={() => handleUpdateResellerLimit(res.key, res.max_uids)}>
-                                        LIMIT
+                                        Adjust Limit
                                       </button>
                                       <button className="btn-neon btn-neon-red" style={{ padding: '4px 6px', fontSize: '10px' }} onClick={() => handleDeleteReseller(res.key)}>
-                                        WIPE
+                                        Delete
                                       </button>
                                     </div>
                                   </td>
@@ -2284,7 +2284,7 @@ axios.post('http://localhost:3000/api/uids/remove', {
                       </div>
                       <div>
                         <button type="submit" className="btn-neon btn-neon-green" style={{ width: '100%', fontSize: '13px' }}>
-                          MINT PROFILE
+                          Create Reseller
                         </button>
                       </div>
                     </form>
