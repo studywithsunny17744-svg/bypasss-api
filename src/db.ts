@@ -8,6 +8,14 @@ export interface UidInfo {
   expiry: string;
 }
 
+export interface BotConfig {
+  token: string;
+  guild_id: string;
+  channel_id: string;
+  is_active: boolean;
+  suspended_reason?: string;
+}
+
 export interface ApiKeyInfo {
   owner_id: string | number;
   created_at: string;
@@ -19,6 +27,7 @@ export interface ApiKeyInfo {
   password?: string;
   displayName?: string;
   avatar?: string;
+  bot_config?: BotConfig;
 }
 
 export interface ActivityLog {

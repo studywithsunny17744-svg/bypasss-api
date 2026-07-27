@@ -6,6 +6,7 @@ import axios from 'axios';
 import crypto from 'crypto';
 import { config } from './config';
 import * as db from './db';
+import { BotManager } from './botManager';
 
 const app = express();
 
@@ -202,6 +203,7 @@ app.get('/api/dashboard', (req: Request, res: Response) => {
     displayName: userDisplayName,
     avatar: userAvatar,
     brandLogo,
+    botConfig: keyInfo?.bot_config || null,
     systemStats: {
       totalUids: systemTotalUids,
       activeAdmins: systemActiveAdmins,
@@ -621,14 +623,121 @@ app.post('/api/admin/env', (req: Request, res: Response) => {
   }
 });
 
-// Mock Bot Deploy Route
-app.post('/api/admin/deploy', (req: Request, res: Response) => {
+// Reseller Bot Hosting Routes
+app.get('/api/bot/status', (req: Request, res: Response) => {
+  const apiKey = req.headers['x-api-key'] as string;
+  if (!apiKey) return res.status(401).json({ error: 'API key is required' });
+
+  const database = db.loadDb();
+  const reseller = database.api_keys[apiKey];
+  if (!reseller) return res.status(401).json({ error: 'Invalid API authorization key' });
+
+  const running = BotManager.isBotRunning(apiKey);
+  res.json({
+    success: true,
+    running,
+    config: reseller.bot_config || null
+  });
+});
+
+app.get('/api/bot/logs', (req: Request, res: Response) => {
+  const apiKey = req.headers['x-api-key'] as string;
+  if (!apiKey) return res.status(401).json({ error: 'API key is required' });
+
+  const logs = BotManager.getLogs(apiKey);
+  res.json({ success: true, logs });
+});
+
+app.post('/api/bot/deploy', async (req: Request, res: Response) => {
+  const apiKey = req.headers['x-api-key'] as string;
   const { botToken, guildId, channelId } = req.body;
+
+  if (!apiKey) return res.status(401).json({ error: 'API key is required' });
   if (!botToken || !guildId || !channelId) {
-    return res.status(400).json({ error: 'Token, Server ID, and Log channel ID are required' });
+    return res.status(400).json({ error: 'Token, Server ID, and Channel ID are required' });
   }
-  // Mock bot launcher success
-  res.json({ success: true, message: 'Discord Bot deployment process initiated successfully' });
+
+  const database = db.loadDb();
+  const reseller = database.api_keys[apiKey];
+  if (!reseller) return res.status(401).json({ error: 'Invalid API authorization key' });
+
+  // Validate credits
+  const credits = db.getCredits(reseller.owner_id);
+  if (credits < 0.05) {
+    return res.status(400).json({ error: 'Insufficient credits (minimum 0.05 coins required) to initialize bot hosting.' });
+  }
+
+  // Save config
+  reseller.bot_config = {
+    token: botToken.trim(),
+    guild_id: guildId.trim(),
+    channel_id: channelId.trim(),
+    is_active: true
+  };
+  delete reseller.bot_config.suspended_reason;
+
+  db.saveDb(database);
+
+  // Deploy bot asynchronously
+  BotManager.startBot(apiKey, botToken.trim(), guildId.trim(), channelId.trim())
+    .then((success) => {
+      if (!success) {
+        const freshDb = db.loadDb();
+        if (freshDb.api_keys[apiKey]?.bot_config) {
+          freshDb.api_keys[apiKey].bot_config!.is_active = false;
+          db.saveDb(freshDb);
+        }
+      }
+    })
+    .catch(() => {});
+
+  res.json({ success: true, message: 'Discord Bot deployment process initiated successfully.' });
+});
+
+app.post('/api/bot/stop', (req: Request, res: Response) => {
+  const apiKey = req.headers['x-api-key'] as string;
+  if (!apiKey) return res.status(401).json({ error: 'API key is required' });
+
+  const database = db.loadDb();
+  const reseller = database.api_keys[apiKey];
+  if (!reseller) return res.status(401).json({ error: 'Invalid API authorization key' });
+
+  if (reseller.bot_config) {
+    reseller.bot_config.is_active = false;
+    db.saveDb(database);
+  }
+
+  BotManager.stopBot(apiKey);
+  res.json({ success: true, message: 'Discord Bot client connection terminated.' });
+});
+
+// Admin compatibility route
+app.post('/api/admin/deploy', async (req: Request, res: Response) => {
+  const apiKey = req.headers['x-api-key'] as string;
+  const { botToken, guildId, channelId } = req.body;
+
+  if (!apiKey) return res.status(401).json({ error: 'API key is required' });
+  if (!botToken || !guildId || !channelId) {
+    return res.status(400).json({ error: 'Token, Server ID, and Channel ID are required' });
+  }
+
+  const database = db.loadDb();
+  const reseller = database.api_keys[apiKey];
+  if (!reseller) return res.status(401).json({ error: 'Invalid API authorization key' });
+
+  reseller.bot_config = {
+    token: botToken.trim(),
+    guild_id: guildId.trim(),
+    channel_id: channelId.trim(),
+    is_active: true
+  };
+  delete reseller.bot_config.suspended_reason;
+
+  db.saveDb(database);
+
+  BotManager.startBot(apiKey, botToken.trim(), guildId.trim(), channelId.trim()).catch(() => {});
+
+  res.json({ success: true, message: 'Discord Bot deployment process initiated successfully.' });
 });
 
 // Update reseller display name/avatar
@@ -816,4 +925,63 @@ if (fs.existsSync(frontendDist)) {
 app.listen(config.port, '0.0.0.0', () => {
   console.log(`White-Label Console backend listening on port ${config.port}`);
   console.log(`Shared Database target path: ${config.dbPath}`);
+
+  // 1. Startup: Launch all active bots
+  const database = db.loadDb();
+  if (database.api_keys) {
+    for (const [apiKey, reseller] of Object.entries(database.api_keys)) {
+      if (reseller.bot_config?.is_active && !reseller.bot_config?.suspended_reason) {
+        console.log(`Starting Discord bot for reseller API Key: ${apiKey.slice(0, 10)}...`);
+        BotManager.startBot(
+          apiKey,
+          reseller.bot_config.token,
+          reseller.bot_config.guild_id,
+          reseller.bot_config.channel_id
+        ).catch(() => {});
+      }
+    }
+  }
+
+  // 2. Billing loop: Deduct reseller credits for active bot hosting (every 2 minutes)
+  setInterval(() => {
+    const liveDb = db.loadDb();
+    let updated = false;
+
+    if (liveDb.api_keys) {
+      for (const [apiKey, reseller] of Object.entries(liveDb.api_keys)) {
+        if (reseller.bot_config?.is_active) {
+          const ownerId = reseller.owner_id;
+          const currentCredits = db.getCredits(ownerId);
+          const activeCost = 0.05; // 0.05 coins charge per billing tick
+
+          if (currentCredits < activeCost) {
+            // Insufficient credits -> Suspend bot!
+            reseller.bot_config.is_active = false;
+            reseller.bot_config.suspended_reason = 'insufficient_credits';
+            updated = true;
+
+            BotManager.addLog(apiKey, '[ERROR] Hosting suspended: Insufficient coin credits balance.');
+            BotManager.stopBot(apiKey);
+
+            db.addActivityLog(0, ownerId, 'bot_suspend', 'system', {
+              user_name: reseller.username || 'System Billing',
+              api_key_used: apiKey,
+              details: { reason: 'insufficient_credits' }
+            });
+          } else {
+            // Deduct credits
+            if (!liveDb.reseller_credits) liveDb.reseller_credits = {};
+            liveDb.reseller_credits[String(ownerId)] = Math.max(0, currentCredits - activeCost);
+            updated = true;
+            
+            BotManager.addLog(apiKey, `[BILLING] Deducted ${activeCost} coins for active bot hosting.`);
+          }
+        }
+      }
+    }
+
+    if (updated) {
+      db.saveDb(liveDb);
+    }
+  }, 120000);
 });

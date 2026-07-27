@@ -139,6 +139,8 @@ export default function App() {
   const [botToken, setBotToken] = useState('');
   const [botGuildId, setBotGuildId] = useState('');
   const [botChannelId, setBotChannelId] = useState('');
+  const [botActive, setBotActive] = useState(false);
+  const [botSuspendedReason, setBotSuspendedReason] = useState('');
 
   // Doc panel code snippets tab state
   const [docSnippetLang, setDocSnippetLang] = useState<'curl' | 'python' | 'node'>('curl');
@@ -199,6 +201,16 @@ export default function App() {
         }
         if (result.brandLogo !== undefined) {
           setBrandLogo(result.brandLogo);
+        }
+        if (result.botConfig) {
+          setBotToken(result.botConfig.token || '');
+          setBotGuildId(result.botConfig.guild_id || '');
+          setBotChannelId(result.botConfig.channel_id || '');
+          setBotActive(result.botConfig.is_active || false);
+          setBotSuspendedReason(result.botConfig.suspended_reason || '');
+        } else {
+          setBotActive(false);
+          setBotSuspendedReason('');
         }
         
         if (result.isMaster) {
@@ -275,6 +287,29 @@ export default function App() {
     if (apiKey && activeTab === 'chat') {
       fetchChatMessages();
       const interval = setInterval(fetchChatMessages, 5000);
+      return () => clearInterval(interval);
+    }
+  }, [apiKey, activeTab]);
+
+  const fetchBotLogs = async () => {
+    if (!apiKey) return;
+    try {
+      const res = await fetch('/api/bot/logs', {
+        headers: { 'x-api-key': apiKey }
+      });
+      const data = await res.json();
+      if (data.success) {
+        setDeployConsoleLogs(data.logs || []);
+      }
+    } catch (err) {
+      console.error('Error fetching bot logs:', err);
+    }
+  };
+
+  useEffect(() => {
+    if (apiKey && activeTab === 'bot') {
+      fetchBotLogs();
+      const interval = setInterval(fetchBotLogs, 3000);
       return () => clearInterval(interval);
     }
   }, [apiKey, activeTab]);
@@ -707,10 +742,10 @@ export default function App() {
       setDeployConsoleLogs(prev => [...prev, `${timestamp()} ${text}`]);
     };
 
-    addLog('[INFO] Deploying Discord Bot whitelisting daemon...');
+    addLog('[INFO] Handshaking with bot orchestrator daemon...');
 
     try {
-      const res = await fetch('/api/admin/deploy', {
+      const res = await fetch('/api/bot/deploy', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -729,31 +764,46 @@ export default function App() {
         return;
       }
 
-      // Start step by step console simulation
+      addLog('[SUCCESS] Deployment request acknowledged. Spawning Discord Client...');
+      // Start background logs check loop
+      fetchBotLogs();
+      
+      // Stop the loading indicator after launch trigger
       setTimeout(() => {
-        addLog('[INFO] Setting up bot shard mapping...');
-        setTimeout(() => {
-          addLog('[INFO] Opening Websocket gateway connection (intent: GUILDS, MEMBERS)...');
-          setTimeout(() => {
-            addLog('[SUCCESS] Authenticated gateway protocol handshake.');
-            setTimeout(() => {
-              addLog(`[INFO] Validating Discord server config (Guild ID: ${botGuildId.trim()})...`);
-              setTimeout(() => {
-                addLog(`[INFO] Initializing whitelisting audit stream (Channel ID: ${botChannelId.trim()})...`);
-                setTimeout(() => {
-                  addLog('[SUCCESS] Whitelisting Discord Bot instance fully deployed and active!');
-                  setIsDeployingBot(false);
-                  setSuccessAlert('Discord Bot successfully deployed!');
-                }, 1000);
-              }, 1000);
-            }, 1000);
-          }, 1000);
-        }, 1000);
-      }, 1000);
+        setIsDeployingBot(false);
+        setBotActive(true);
+        setSuccessAlert('Discord Bot deployment launched!');
+        fetchDashboardData(apiKey);
+      }, 1500);
 
     } catch (err) {
       addLog('[ERROR] Connection failed: bot deployment process launcher timed out.');
       setIsDeployingBot(false);
+    }
+  };
+
+  const handleStopBot = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch('/api/bot/stop', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey
+        }
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setBotActive(false);
+        setSuccessAlert('Discord Bot successfully shut down.');
+        fetchDashboardData(apiKey);
+      } else {
+        setErrorAlert(data.error || 'Failed to stop bot client.');
+      }
+    } catch (err) {
+      setErrorAlert('Error shutting down bot connection.');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -1018,6 +1068,11 @@ export default function App() {
               {!sidebarCollapsed && <span>API Docs</span>}
             </button>
 
+            <button className={`sidebar-btn ${activeTab === 'bot' ? 'active' : ''}`} onClick={() => { setActiveTab('bot'); setSidebarOpen(false); }}>
+              <SwapIcon />
+              {!sidebarCollapsed && <span>Bot Deploy</span>}
+            </button>
+
             {/* Section: SOCIAL */}
             {!sidebarCollapsed && <div className="sidebar-section-title">Social</div>}
             <button className={`sidebar-btn ${activeTab === 'profile' ? 'active' : ''}`} onClick={() => { setActiveTab('profile'); setSidebarOpen(false); }}>
@@ -1052,10 +1107,6 @@ export default function App() {
                 <button className={`sidebar-btn ${activeTab === 'purge' ? 'active' : ''}`} onClick={() => { setActiveTab('purge'); setSidebarOpen(false); }}>
                   <TrashIcon />
                   {!sidebarCollapsed && <span>Purge Gate</span>}
-                </button>
-                <button className={`sidebar-btn ${activeTab === 'bot' ? 'active' : ''}`} onClick={() => { setActiveTab('bot'); setSidebarOpen(false); }}>
-                  <SwapIcon />
-                  {!sidebarCollapsed && <span>Bot Deploy</span>}
                 </button>
                 <button className={`sidebar-btn ${activeTab === 'system' ? 'active' : ''}`} onClick={() => { setActiveTab('system'); setSidebarOpen(false); }}>
                   <KeyIcon />
@@ -2463,27 +2514,52 @@ axios.post('http://localhost:3000/api/uids/remove', {
               )}
 
               {/* TAB CONTENT: Discord Bot launcher */}
-              {isMasterState && activeTab === 'bot' && (
+              {activeTab === 'bot' && (
                 <div className="glass-card" style={{ maxWidth: '600px' }}>
-                  <h3 style={{ fontSize: '16px', marginBottom: '16px' }}>Automated Discord Bot Process Launcher</h3>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                    <h3 style={{ fontSize: '16px', margin: 0 }}>Automated Discord Bot Process Launcher</h3>
+                    <span className={`status-badge ${botActive ? 'status-badge-active' : botSuspendedReason ? 'status-badge-suspended' : 'status-badge-offline'}`} style={{ textTransform: 'uppercase', fontSize: '10px', padding: '4px 10px', borderRadius: '12px' }}>
+                      {botActive ? 'Online' : botSuspendedReason ? 'Suspended' : 'Stopped'}
+                    </span>
+                  </div>
+
+                  {botSuspendedReason === 'insufficient_credits' && (
+                    <div style={{ marginBottom: '16px', padding: '12px', background: 'rgba(255, 49, 49, 0.05)', border: '1px dashed var(--accent-red)', borderRadius: '8px', fontSize: '12px', color: 'var(--text-muted)', lineHeight: '1.4' }}>
+                      <span style={{ color: 'var(--accent-red)', fontWeight: 'bold' }}>⚠️ INSTANCE SUSPENDED:</span> Your whitelisting bot client hosting was suspended due to insufficient coin credits. Please adjust credits or redeem a gift voucher to resume bot operation.
+                    </div>
+                  )}
+
+                  {!stats.isMaster && (
+                    <div style={{ marginBottom: '16px', fontSize: '11px', color: 'var(--text-muted)', lineHeight: '1.4', background: 'rgba(255,255,255,0.02)', padding: '10px', borderRadius: '6px', border: '1px solid var(--border-glass)' }}>
+                      💡 <span style={{ color: 'var(--accent-cyan)', fontWeight: 'bold' }}>Hosting Charge:</span> Bot hosting costs **0.05 coins** per billing interval. Ensure your wallet has credits to prevent automatic server suspension.
+                    </div>
+                  )}
+
                   <form onSubmit={handleDeployBot} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                     <div>
                       <label style={{ display: 'block', fontSize: '11px', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '6px' }}>Discord Bot Token</label>
-                      <input type="password" placeholder="MTUyMzEx..." className="glow-input" value={botToken} onChange={e => setBotToken(e.target.value)} required />
+                      <input type="password" placeholder="MTUyMzEx..." className="glow-input" value={botToken} onChange={e => setBotToken(e.target.value)} required readOnly={botActive} />
                     </div>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
                       <div>
                         <label style={{ display: 'block', fontSize: '11px', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '6px' }}>Discord Guild ID</label>
-                        <input type="text" placeholder="14396178..." className="glow-input" value={botGuildId} onChange={e => setBotGuildId(e.target.value)} required />
+                        <input type="text" placeholder="14396178..." className="glow-input" value={botGuildId} onChange={e => setBotGuildId(e.target.value)} required readOnly={botActive} />
                       </div>
                       <div>
                         <label style={{ display: 'block', fontSize: '11px', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '6px' }}>Audit Channel ID</label>
-                        <input type="text" placeholder="15088337..." className="glow-input" value={botChannelId} onChange={e => setBotChannelId(e.target.value)} required />
+                        <input type="text" placeholder="15088337..." className="glow-input" value={botChannelId} onChange={e => setBotChannelId(e.target.value)} required readOnly={botActive} />
                       </div>
                     </div>
-                    <button type="submit" className="btn-neon btn-neon-purple" style={{ fontSize: '13px', padding: '12px' }} disabled={isDeployingBot}>
-                      {isDeployingBot ? 'LAUNCHING DEPLOYMENT...' : 'DEPLOY BOT INSTANCE'}
-                    </button>
+                    
+                    {botActive ? (
+                      <button type="button" className="btn-neon btn-neon-red" style={{ fontSize: '13px', padding: '12px' }} onClick={handleStopBot}>
+                        SHUT DOWN BOT CLIENT
+                      </button>
+                    ) : (
+                      <button type="submit" className="btn-neon btn-neon-purple" style={{ fontSize: '13px', padding: '12px' }} disabled={isDeployingBot}>
+                        {isDeployingBot ? 'LAUNCHING DEPLOYMENT...' : 'DEPLOY BOT INSTANCE'}
+                      </button>
+                    )}
                   </form>
 
                   {deployConsoleLogs.length > 0 && (
@@ -2502,8 +2578,8 @@ axios.post('http://localhost:3000/api/uids/remove', {
                     }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '6px', marginBottom: '10px', color: 'var(--text-muted)', fontSize: '10px', fontWeight: 'bold' }}>
                         <span>DEPLOYMENT CONSOLE STDOUT</span>
-                        <span style={{ color: isDeployingBot ? 'var(--accent-cyan)' : 'var(--accent-green)' }}>
-                          {isDeployingBot ? 'RUNNING' : 'ONLINE'}
+                        <span style={{ color: isDeployingBot ? 'var(--accent-cyan)' : botActive ? 'var(--accent-green)' : 'var(--accent-red)' }}>
+                          {isDeployingBot ? 'RUNNING' : botActive ? 'ONLINE' : 'OFFLINE'}
                         </span>
                       </div>
                       {deployConsoleLogs.map((log, idx) => (
