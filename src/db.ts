@@ -30,6 +30,14 @@ export interface ActivityLog {
   details?: Record<string, any>;
 }
 
+export interface ChatMessage {
+  id: number;
+  sender: string;
+  text: string;
+  sent_at: string;
+  user_id: string;
+}
+
 export interface DatabaseSchema {
   resellers: (string | number)[];
   whitelisted_channels: (string | number)[];
@@ -44,6 +52,7 @@ export interface DatabaseSchema {
   vouchers?: Record<string, any>;
   lockdown?: { active: boolean; reason: string };
   user_names_cache?: Record<string, string>;
+  chat_messages?: ChatMessage[];
 }
 
 const defaultDb = (): DatabaseSchema => ({
@@ -56,7 +65,8 @@ const defaultDb = (): DatabaseSchema => ({
   blocked_guilds: [],
   api_keys: {},
   activity_logs: [],
-  user_languages: {}
+  user_languages: {},
+  chat_messages: []
 });
 
 export function loadDb(): DatabaseSchema {
@@ -425,4 +435,65 @@ export function deleteApiKey(apiKey: string): boolean {
     return true;
   }
   return false;
+}
+
+// Persistent Chat Helper Functions
+export function getChatMessages(): ChatMessage[] {
+  const db = loadDb();
+  const messages = db.chat_messages || [];
+  
+  // Seed with default instructions if completely empty
+  if (messages.length === 0) {
+    const formatDate = (date: Date) => {
+      const pad = (n: number) => n.toString().padStart(2, '0');
+      return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+    };
+    return [
+      {
+        id: 1,
+        sender: 'Support Bot',
+        text: 'Welcome to the Team Chat! Type below to ask support or coordinate with admins.',
+        sent_at: formatDate(new Date(Date.now() - 3600000)),
+        user_id: 'system'
+      },
+      {
+        id: 2,
+        sender: 'Admin Mani',
+        text: 'All bypass servers are running operational on Azion Cloud Edge nodes. Upstream speeds optimized.',
+        sent_at: formatDate(new Date(Date.now() - 1800000)),
+        user_id: '1457931837769908467'
+      }
+    ];
+  }
+  return messages;
+}
+
+export function addChatMessage(sender: string, text: string, userId: string): ChatMessage {
+  const db = loadDb();
+  if (!db.chat_messages) {
+    db.chat_messages = [];
+  }
+
+  const formatDate = (date: Date) => {
+    const pad = (n: number) => n.toString().padStart(2, '0');
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+  };
+
+  const newMsg: ChatMessage = {
+    id: Date.now() + Math.floor(Math.random() * 1000),
+    sender,
+    text: text.trim(),
+    sent_at: formatDate(new Date()),
+    user_id: String(userId)
+  };
+
+  db.chat_messages.push(newMsg);
+
+  // Limit cache to last 100 messages to prevent JSON size bloating
+  if (db.chat_messages.length > 100) {
+    db.chat_messages = db.chat_messages.slice(-100);
+  }
+
+  saveDb(db);
+  return newMsg;
 }

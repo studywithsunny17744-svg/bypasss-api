@@ -1160,13 +1160,6 @@
     },
     "activity_logs": [
         {
-            "timestamp": "2026-07-16 12:46:51",
-            "guild_id": 1513596030883598300,
-            "user_id": 1447550317419036700,
-            "action": "add",
-            "uid": "15224020459"
-        },
-        {
             "timestamp": "2026-07-16 12:48:05",
             "guild_id": 1513596030883598300,
             "user_id": 1447550317419036700,
@@ -10598,6 +10591,20 @@
             "details": {
                 "user_name": "Reseller_user_1785164872420",
                 "api_key_used": "Mani272_b9910bd9dfad1868310cb9e8945be69e"
+            }
+        },
+        {
+            "timestamp": "2026-07-28 01:23:48",
+            "guild_id": 0,
+            "user_id": "1457931837769908467",
+            "action": "add",
+            "uid": "64545454545",
+            "details": {
+                "user_name": "Master Administrator",
+                "api_key_used": "GTCAPI-872F834050A1C868448EC5B45275D704",
+                "cost": 5.3,
+                "duration": 30,
+                "platform": "Bluestacks"
             }
         }
     ],

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import SplashCursor from './SplashCursor';
 import { GradientText, CountUp, GlowCard, GlitchText } from './ReactBitsComponents';
 import FloatingLines from './FloatingLines';
+import WelcomeOverlay from './WelcomeOverlay';
 
 
 // --- INLINE SVG COMPONENTS (Accurately matching the screenshot icons) ---
@@ -143,11 +144,9 @@ export default function App() {
   const [docSnippetLang, setDocSnippetLang] = useState<'curl' | 'python' | 'node'>('curl');
 
   // Simulated Team Chat state
-  const [chatMessages, setChatMessages] = useState<any[]>([
-    { id: 1, sender: 'Support Bot', text: 'Welcome to the Team Chat! Type below to ask support or coordinate with admins.', sent: false },
-    { id: 2, sender: 'Admin Mani', text: 'All bypass servers are running operational on Azion Cloud Edge nodes. Upstream speeds optimized.', sent: false }
-  ]);
+  const [chatMessages, setChatMessages] = useState<any[]>([]);
   const [chatInput, setChatInput] = useState('');
+  const [showWelcome, setShowWelcome] = useState(false);
 
   // Auto-dismiss Alerts
   useEffect(() => {
@@ -236,16 +235,43 @@ export default function App() {
     }
   };
 
+  const fetchChatMessages = async () => {
+    if (!apiKey) return;
+    try {
+      const res = await fetch('/api/chat', {
+        headers: { 'x-api-key': apiKey }
+      });
+      const data = await res.json();
+      if (data.success) {
+        setChatMessages(data.messages || []);
+      }
+    } catch (err) {
+      console.error('Error fetching chat:', err);
+    }
+  };
+
   useEffect(() => {
     if (apiKey) {
       fetchDashboardData(apiKey);
       fetchLeaderboard();
+      const seen = sessionStorage.getItem('welcome_seen');
+      if (!seen) {
+        setShowWelcome(true);
+      }
       const interval = setInterval(() => {
         fetchDashboardData(apiKey);
       }, 20000);
       return () => clearInterval(interval);
     }
   }, [apiKey]);
+
+  useEffect(() => {
+    if (apiKey && activeTab === 'chat') {
+      fetchChatMessages();
+      const interval = setInterval(fetchChatMessages, 5000);
+      return () => clearInterval(interval);
+    }
+  }, [apiKey, activeTab]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -264,9 +290,11 @@ export default function App() {
       const data = await res.json();
       
       if (res.ok && data.success) {
+        sessionStorage.removeItem('welcome_seen');
         localStorage.setItem('api_key', data.apiKey);
         setIsMasterState(data.isMaster);
         setApiKey(data.apiKey);
+        setShowWelcome(true);
       } else {
         setLoginError(data.error || 'Invalid username or password.');
       }
@@ -794,37 +822,32 @@ export default function App() {
     }
   };
 
-  // Send message mock team chat handler
-  const handleSendChatMessage = (e: React.FormEvent) => {
+  // Send message team chat handler via backend API
+  const handleSendChatMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!chatInput.trim()) return;
 
-    const newMsg = {
-      id: Date.now(),
-      sender: stats.isMaster ? 'Admin Mani' : `Reseller_${stats.ownerId.slice(-4)}`,
-      text: chatInput.trim(),
-      sent: true
-    };
-    
-    setChatMessages(prev => [...prev, newMsg]);
+    const textVal = chatInput.trim();
     setChatInput('');
 
-    // Trigger mock response after 1.5 seconds
-    setTimeout(() => {
-      const responses = [
-        "Copy that. We are monitoring node whitelists.",
-        "Understood. If you need credit coins, wrap vouchers using the vouchers tab.",
-        "Server statuses: Azure nodes: healthy. Azion CDN edge nodes: healthy.",
-        "Upstream Cheats API synced correctly."
-      ];
-      const randomReply = {
-        id: Date.now() + 1,
-        sender: 'Support Bot',
-        text: responses[Math.floor(Math.random() * responses.length)],
-        sent: false
-      };
-      setChatMessages(prev => [...prev, randomReply]);
-    }, 1500);
+    try {
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey
+        },
+        body: JSON.stringify({ text: textVal })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        fetchChatMessages();
+      } else {
+        setErrorAlert(data.error || 'Failed to send message.');
+      }
+    } catch (err) {
+      setErrorAlert('Error connecting to chat server.');
+    }
   };
 
   // Helper: Get remaining validity text
@@ -860,8 +883,17 @@ export default function App() {
         SPLAT_FORCE={6000}
         COLOR_UPDATE_SPEED={10}
       />
-      
       {/* Alert Overlay Notification System */}
+      {showWelcome && apiKey && (
+        <WelcomeOverlay
+          displayName={userDisplayName || stats.ownerId}
+          role={stats.isMaster ? 'Administrator' : 'Reseller'}
+          onClose={() => {
+            sessionStorage.setItem('welcome_seen', 'true');
+            setShowWelcome(false);
+          }}
+        />
+      )}
       {successAlert && (
         <div className="glass-card rb-alert" style={{
           position: 'fixed', top: '24px', right: '24px', zIndex: 1000,

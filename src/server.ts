@@ -752,6 +752,45 @@ app.post('/api/uids/bulk-remove', async (req: Request, res: Response) => {
   res.json({ success: true, message: `Successfully bulk deleted ${removedCount} UIDs.` });
 });
 
+// 11. Team Chat API Endpoints
+app.get('/api/chat', (req: Request, res: Response) => {
+  const apiKey = req.headers['x-api-key'] as string;
+  if (!apiKey) return res.status(401).json({ error: 'API key is required' });
+  const isMasterKey = isMaster(apiKey);
+  const keyInfo = db.getApiKeyInfo(apiKey);
+  if (!isMasterKey && !keyInfo) return res.status(401).json({ error: 'Unauthorized key' });
+
+  const messages = db.getChatMessages();
+  res.json({ success: true, messages });
+});
+
+app.post('/api/chat', (req: Request, res: Response) => {
+  const apiKey = req.headers['x-api-key'] as string;
+  const { text } = req.body;
+  
+  if (!apiKey) return res.status(401).json({ error: 'API key is required' });
+  if (!text || !text.trim()) return res.status(400).json({ error: 'Message text is required' });
+
+  const isMasterKey = isMaster(apiKey);
+  const keyInfo = db.getApiKeyInfo(apiKey);
+  if (!isMasterKey && !keyInfo) return res.status(401).json({ error: 'Unauthorized key' });
+
+  let senderName = '';
+  let userId = '';
+
+  const database = db.loadDb();
+  if (isMasterKey) {
+    senderName = database.user_names_cache?.['admin_display'] || 'Admin Mani';
+    userId = String(config.masterAdminId);
+  } else if (keyInfo) {
+    senderName = keyInfo.displayName || keyInfo.username || `Reseller_${String(keyInfo.owner_id).slice(-4)}`;
+    userId = String(keyInfo.owner_id);
+  }
+
+  const newMsg = db.addChatMessage(senderName, text.trim(), userId);
+  res.json({ success: true, message: newMsg });
+});
+
 // Serve compiled static frontend React files
 const frontendDist = path.resolve(__dirname, '../frontend/dist');
 if (fs.existsSync(frontendDist)) {
