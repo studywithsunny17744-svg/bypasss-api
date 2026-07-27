@@ -80,7 +80,7 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [successAlert, setSuccessAlert] = useState('');
   const [errorAlert, setErrorAlert] = useState('');
-  const [stats, setStats] = useState({ credits: 0, activeUids: 0, maxLimit: 100, isMaster: false, ownerId: '' });
+  const [stats, setStats] = useState({ credits: 0, activeUids: 0, maxLimit: 100, isMaster: false, ownerId: '', username: '' });
   const [uidsList, setUidsList] = useState<Record<string, UidData>>({});
   const [auditLogs, setAuditLogs] = useState<any[]>([]);
   const [leaderboard, setLeaderboard] = useState<any[]>([]);
@@ -183,7 +183,8 @@ export default function App() {
           activeUids: result.activeUids,
           maxLimit: result.maxLimit,
           isMaster: result.isMaster,
-          ownerId: result.ownerId
+          ownerId: result.ownerId,
+          username: result.username || ''
         });
         setIsMasterState(result.isMaster);
         setUidsList(result.uids || {});
@@ -353,7 +354,7 @@ export default function App() {
     localStorage.removeItem('api_key');
     setApiKey('');
     setIsMasterState(false);
-    setStats({ credits: 0, activeUids: 0, maxLimit: 100, isMaster: false, ownerId: '' });
+    setStats({ credits: 0, activeUids: 0, maxLimit: 100, isMaster: false, ownerId: '', username: '' });
     setUidsList({});
     setAuditLogs([]);
     setAdminResellers([]);
@@ -2064,12 +2065,12 @@ axios.post('http://localhost:3000/api/uids/remove', {
                       ) : (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                           <div style={{ display: 'flex', flexDirection: 'column' }}>
-                            <span style={{ fontSize: '18px', fontWeight: '700', color: '#fff' }}>{userDisplayName || stats.ownerId || 'Mani272'}</span>
-                            <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{stats.isMaster ? 'Administrator' : 'Normal'}</span>
+                            <span style={{ fontSize: '18px', fontWeight: '700', color: '#fff' }}>{userDisplayName || stats.username || stats.ownerId || 'Mani272'}</span>
+                            <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{stats.isMaster ? 'Administrator' : 'Reseller'}</span>
                           </div>
                           <div style={{ display: 'flex', gap: '10px' }}>
                             <button className="btn-neon" style={{ padding: '6px 16px', fontSize: '12px' }} onClick={() => {
-                              setEditDisplayName(userDisplayName || stats.ownerId || 'Mani272');
+                              setEditDisplayName(userDisplayName || stats.username || stats.ownerId || 'Mani272');
                               setEditAvatarUrl(userAvatar);
                               setIsEditingProfile(true);
                             }}>Edit Profile</button>
@@ -2085,7 +2086,7 @@ axios.post('http://localhost:3000/api/uids/remove', {
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
                       <div>
                         <label style={{ display: 'block', fontSize: '11px', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '8px', fontWeight: 600 }}>Username</label>
-                        <input type="text" className="glow-input" value={stats.ownerId || 'Mani272'} readOnly style={{ color: '#fff', cursor: 'default' }} />
+                        <input type="text" className="glow-input" value={stats.username || stats.ownerId || 'Mani272'} readOnly style={{ color: '#fff', cursor: 'default' }} />
                       </div>
                       <div>
                         <label style={{ display: 'block', fontSize: '11px', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '8px', fontWeight: 600 }}>Role</label>

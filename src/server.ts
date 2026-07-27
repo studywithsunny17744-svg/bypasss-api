@@ -227,6 +227,7 @@ app.get('/api/dashboard', (req: Request, res: Response) => {
     brandLogo,
     botConfig: keyInfo?.bot_config || null,
     expiry: keyInfo?.expiry || 'Lifetime',
+    username: keyInfo?.username || config.adminUsername,
     systemStats: {
       totalUids: systemTotalUids,
       activeAdmins: systemActiveAdmins,
