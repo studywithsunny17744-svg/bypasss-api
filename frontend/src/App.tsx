@@ -534,7 +534,8 @@ export default function App() {
           password: genResellerPassword.trim(),
           userId: genResellerId.trim() || undefined,
           maxUids: parseInt(genResellerLimit, 10) || 100,
-          initialCredits: parseFloat(genResellerCredits) || 0
+          initialCredits: parseFloat(genResellerCredits) || 0,
+          expiry: genResellerExpiry || undefined
         })
       });
       const data = await res.json();
@@ -544,6 +545,7 @@ export default function App() {
         setGenResellerPassword('');
         setGenResellerId('');
         setGenResellerCredits('0');
+        setGenResellerExpiry('');
         setSuccessAlert('Reseller account created successfully!');
         fetchResellersList(apiKey);
       } else {
@@ -551,6 +553,34 @@ export default function App() {
       }
     } catch (err) {
       setErrorAlert('Network error creating reseller entry in database.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleUpdateResellerExpiry = async (resKey: string, currentExpiry: string) => {
+    const promptVal = prompt('Enter new Expiration Date (YYYY-MM-DD) or leave blank for Lifetime:', currentExpiry);
+    if (promptVal === null) return;
+
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/admin/keys/${resKey}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey
+        },
+        body: JSON.stringify({ expiry: promptVal.trim() })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setSuccessAlert('Reseller expiration updated successfully!');
+        fetchResellersList(apiKey);
+      } else {
+        setErrorAlert(data.error || 'Failed to update reseller expiry.');
+      }
+    } catch (err) {
+      setErrorAlert('Network error updating reseller expiry.');
     } finally {
       setLoading(false);
     }
@@ -2069,7 +2099,7 @@ axios.post('http://localhost:3000/api/uids/remove', {
                     {/* Inputs Row 3: Account Expires */}
                     <div>
                       <label style={{ display: 'block', fontSize: '11px', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '8px', fontWeight: 600 }}>Account Expires</label>
-                      <input type="text" className="glow-input" value="August 11, 2026" readOnly style={{ color: '#fff', cursor: 'default' }} />
+                      <input type="text" className="glow-input" value={userExpiry || 'Lifetime'} readOnly style={{ color: '#fff', cursor: 'default' }} />
                     </div>
 
                     <hr style={{ border: 'none', borderTop: '1px solid var(--border-glass)' }} />
@@ -2428,6 +2458,10 @@ axios.post('http://localhost:3000/api/uids/remove', {
                         <input type="number" step="0.1" className="glow-input" value={genResellerCredits} onChange={e => setGenResellerCredits(e.target.value)} required />
                       </div>
                       <div>
+                        <label style={{ display: 'block', fontSize: '11px', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '6px' }}>Expiry Date (Optional)</label>
+                        <input type="date" className="glow-input" value={genResellerExpiry} onChange={e => setGenResellerExpiry(e.target.value)} />
+                      </div>
+                      <div>
                         <button type="submit" className="btn-neon btn-neon-green" style={{ width: '100%', fontSize: '13px' }}>
                           Create Reseller
                         </button>
@@ -2457,6 +2491,7 @@ axios.post('http://localhost:3000/api/uids/remove', {
                             <th>Credits (Coins)</th>
                             <th>Requests</th>
                             <th>Created On</th>
+                            <th>Expiry</th>
                             <th>Status</th>
                             <th>Actions</th>
                           </tr>
@@ -2472,6 +2507,7 @@ axios.post('http://localhost:3000/api/uids/remove', {
                               <td style={{ fontWeight: 600, color: 'var(--accent-green)' }}>{res.credits.toFixed(2)}</td>
                               <td>{res.requests_count}</td>
                               <td style={{ fontSize: '10px' }}>{res.created_at}</td>
+                              <td style={{ fontSize: '10px', color: 'var(--accent-cyan)' }}>{res.expiry || 'Lifetime'}</td>
                               <td>
                                 <span className={`status-badge ${res.is_active ? 'status-badge-active' : 'status-badge-suspended'}`}>
                                   {res.is_active ? 'Active' : 'Suspended'}
@@ -2480,19 +2516,22 @@ axios.post('http://localhost:3000/api/uids/remove', {
                               <td>
                                 <div style={{ display: 'flex', gap: '6px' }}>
                                   <button className="btn-neon" style={{ padding: '4px 6px', fontSize: '10px' }} onClick={() => handleToggleReseller(res.key)}>
-                                    TOGGLE
+                                    Toggle Status
                                   </button>
                                   <button className="btn-neon btn-neon-purple" style={{ padding: '4px 6px', fontSize: '10px' }} onClick={() => handleUpdateResellerPassword(res.key, res.password)}>
-                                    PASS
+                                    Change Password
                                   </button>
                                   <button className="btn-neon btn-neon-green" style={{ padding: '4px 6px', fontSize: '10px' }} onClick={() => handleUpdateResellerCredits(res.key, res.credits)}>
-                                    COINS
+                                    Adjust Credits
                                   </button>
                                   <button className="btn-neon btn-neon-purple" style={{ padding: '4px 6px', fontSize: '10px' }} onClick={() => handleUpdateResellerLimit(res.key, res.max_uids)}>
-                                    LIMIT
+                                    Adjust Limit
+                                  </button>
+                                  <button className="btn-neon btn-neon-purple" style={{ padding: '4px 6px', fontSize: '10px' }} onClick={() => handleUpdateResellerExpiry(res.key, res.expiry)}>
+                                    Adjust Expiry
                                   </button>
                                   <button className="btn-neon btn-neon-red" style={{ padding: '4px 6px', fontSize: '10px' }} onClick={() => handleDeleteReseller(res.key)}>
-                                    WIPE
+                                    Delete
                                   </button>
                                 </div>
                               </td>
