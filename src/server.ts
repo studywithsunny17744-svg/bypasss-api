@@ -188,6 +188,8 @@ app.get('/api/dashboard', (req: Request, res: Response) => {
     ? (database.user_names_cache?.['admin_avatar'] || '') 
     : (keyInfo?.avatar || '');
 
+  const brandLogo = database.user_names_cache?.['admin_avatar'] || '';
+
   res.json({
     success: true,
     credits,
@@ -199,6 +201,7 @@ app.get('/api/dashboard', (req: Request, res: Response) => {
     ownerId: keyInfo?.owner_id || config.masterAdminId,
     displayName: userDisplayName,
     avatar: userAvatar,
+    brandLogo,
     systemStats: {
       totalUids: systemTotalUids,
       activeAdmins: systemActiveAdmins,

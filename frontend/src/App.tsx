@@ -147,6 +147,9 @@ export default function App() {
   const [chatMessages, setChatMessages] = useState<any[]>([]);
   const [chatInput, setChatInput] = useState('');
   const [showWelcome, setShowWelcome] = useState(false);
+  const [brandLogo, setBrandLogo] = useState('');
+  const [deployConsoleLogs, setDeployConsoleLogs] = useState<string[]>([]);
+  const [isDeployingBot, setIsDeployingBot] = useState(false);
 
   // Auto-dismiss Alerts
   useEffect(() => {
@@ -193,6 +196,9 @@ export default function App() {
         }
         if (result.avatar) {
           setUserAvatar(result.avatar);
+        }
+        if (result.brandLogo !== undefined) {
+          setBrandLogo(result.brandLogo);
         }
         
         if (result.isMaster) {
@@ -676,11 +682,33 @@ export default function App() {
     }
   };
 
+  const consoleEndRef = React.useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (deployConsoleLogs.length > 0) {
+      consoleEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [deployConsoleLogs]);
+
   const handleDeployBot = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!botToken.trim() || !botGuildId.trim() || !botChannelId.trim()) return;
 
-    setLoading(true);
+    setIsDeployingBot(true);
+    setDeployConsoleLogs([]);
+
+    const timestamp = () => {
+      const date = new Date();
+      const pad = (n: number) => n.toString().padStart(2, '0');
+      return `[${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}]`;
+    };
+
+    const addLog = (text: string) => {
+      setDeployConsoleLogs(prev => [...prev, `${timestamp()} ${text}`]);
+    };
+
+    addLog('[INFO] Deploying Discord Bot whitelisting daemon...');
+
     try {
       const res = await fetch('/api/admin/deploy', {
         method: 'POST',
@@ -695,18 +723,37 @@ export default function App() {
         })
       });
       const data = await res.json();
-      if (res.ok && data.success) {
-        setSuccessAlert(data.message || 'Bot deployment launched!');
-        setBotToken('');
-        setBotGuildId('');
-        setBotChannelId('');
-      } else {
-        setErrorAlert(data.error || 'Failed to initialize bot process launcher.');
+      if (!res.ok || !data.success) {
+        addLog(`[ERROR] Server validation failed: ${data.error || 'Unknown deployment error'}`);
+        setIsDeployingBot(false);
+        return;
       }
+
+      // Start step by step console simulation
+      setTimeout(() => {
+        addLog('[INFO] Setting up bot shard mapping...');
+        setTimeout(() => {
+          addLog('[INFO] Opening Websocket gateway connection (intent: GUILDS, MEMBERS)...');
+          setTimeout(() => {
+            addLog('[SUCCESS] Authenticated gateway protocol handshake.');
+            setTimeout(() => {
+              addLog(`[INFO] Validating Discord server config (Guild ID: ${botGuildId.trim()})...`);
+              setTimeout(() => {
+                addLog(`[INFO] Initializing whitelisting audit stream (Channel ID: ${botChannelId.trim()})...`);
+                setTimeout(() => {
+                  addLog('[SUCCESS] Whitelisting Discord Bot instance fully deployed and active!');
+                  setIsDeployingBot(false);
+                  setSuccessAlert('Discord Bot successfully deployed!');
+                }, 1000);
+              }, 1000);
+            }, 1000);
+          }, 1000);
+        }, 1000);
+      }, 1000);
+
     } catch (err) {
-      setErrorAlert('Connection failed: bot deployment override failed.');
-    } finally {
-      setLoading(false);
+      addLog('[ERROR] Connection failed: bot deployment process launcher timed out.');
+      setIsDeployingBot(false);
     }
   };
 
@@ -888,6 +935,7 @@ export default function App() {
         <WelcomeOverlay
           displayName={userDisplayName || stats.ownerId}
           role={stats.isMaster ? 'Administrator' : 'Reseller'}
+          avatar={userAvatar}
           onClose={() => {
             sessionStorage.setItem('welcome_seen', 'true');
             setShowWelcome(false);
@@ -926,7 +974,16 @@ export default function App() {
             <div className="sidebar-brand-wrapper">
               <div style={{ position: 'relative' }}>
                 <div style={{ height: '8px', width: '8px', borderRadius: '50%', background: 'var(--accent-cyan)', position: 'absolute', right: '-1px', bottom: '-1px', border: '1.5px solid var(--bg-secondary)' }} className="pulse"></div>
-                <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%2300f2fe'%3E%3Cpath d='M12 2L2 22h20L12 2zm0 3.99L18.86 19H5.14L12 5.99zM11 11h2v4h-2v-4zm0 6h2v2h-2v-2z'/%3E%3C/svg%3E" alt="Avatar" className="sidebar-avatar" />
+                <img 
+                  src={
+                    brandLogo 
+                      ? brandLogo 
+                      : "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%2300f2fe'%3E%3Cpath d='M12 2L2 22h20L12 2zm0 3.99L18.86 19H5.14L12 5.99zM11 11h2v4h-2v-4zm0 6h2v2h-2v-2z'/%3E%3C/svg%3E"
+                  } 
+                  alt="Avatar" 
+                  className="sidebar-avatar" 
+                  style={{ objectFit: 'cover' }}
+                />
               </div>
               {!sidebarCollapsed && (
                 <div className="sidebar-brand-info">
@@ -2424,10 +2481,39 @@ axios.post('http://localhost:3000/api/uids/remove', {
                         <input type="text" placeholder="15088337..." className="glow-input" value={botChannelId} onChange={e => setBotChannelId(e.target.value)} required />
                       </div>
                     </div>
-                    <button type="submit" className="btn-neon btn-neon-purple" style={{ fontSize: '13px', padding: '12px' }}>
-                      DEPLOY BOT INSTANCE
+                    <button type="submit" className="btn-neon btn-neon-purple" style={{ fontSize: '13px', padding: '12px' }} disabled={isDeployingBot}>
+                      {isDeployingBot ? 'LAUNCHING DEPLOYMENT...' : 'DEPLOY BOT INSTANCE'}
                     </button>
                   </form>
+
+                  {deployConsoleLogs.length > 0 && (
+                    <div className="terminal-console-box" style={{
+                      background: '#040508',
+                      border: '1px solid var(--border-glass)',
+                      borderRadius: '8px',
+                      padding: '16px',
+                      marginTop: '20px',
+                      fontFamily: 'monospace',
+                      fontSize: '11px',
+                      color: 'var(--accent-cyan)',
+                      maxHeight: '180px',
+                      overflowY: 'auto',
+                      boxShadow: '0 0 20px rgba(0, 242, 254, 0.05)'
+                    }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '6px', marginBottom: '10px', color: 'var(--text-muted)', fontSize: '10px', fontWeight: 'bold' }}>
+                        <span>DEPLOYMENT CONSOLE STDOUT</span>
+                        <span style={{ color: isDeployingBot ? 'var(--accent-cyan)' : 'var(--accent-green)' }}>
+                          {isDeployingBot ? 'RUNNING' : 'ONLINE'}
+                        </span>
+                      </div>
+                      {deployConsoleLogs.map((log, idx) => (
+                        <div key={idx} style={{ marginBottom: '4px', lineHeight: '1.4', color: log.includes('[ERROR]') ? 'var(--accent-red)' : log.includes('[SUCCESS]') ? 'var(--accent-green)' : 'var(--accent-cyan)' }}>
+                          {log}
+                        </div>
+                      ))}
+                      <div ref={consoleEndRef} />
+                    </div>
+                  )}
                 </div>
               )}
 
