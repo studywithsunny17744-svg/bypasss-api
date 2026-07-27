@@ -21,7 +21,6 @@ out/
 *.key
 
 # Local database / data stores
-database.json
 *.db
 *.sqlite
 
