@@ -249,7 +249,7 @@ export default function FloatingLines({
       const rect = el.getBoundingClientRect();
       uniforms.iMouse.value.set(e.clientX - rect.left, rect.height - (e.clientY - rect.top));
     };
-    el.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mousemove', onMouseMove);
 
     let animId: number;
     const animate = () => {
@@ -269,7 +269,7 @@ export default function FloatingLines({
 
     return () => {
       cancelAnimationFrame(animId);
-      el.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mousemove', onMouseMove);
       resizeObserver.disconnect();
       renderer.dispose();
       geometry.dispose();
@@ -289,7 +289,7 @@ export default function FloatingLines({
         inset: 0,
         width: '100%',
         height: '100%',
-        pointerEvents: interactive ? 'auto' : 'none',
+        pointerEvents: 'none',
         zIndex: 0,
         ...style,
       }}
