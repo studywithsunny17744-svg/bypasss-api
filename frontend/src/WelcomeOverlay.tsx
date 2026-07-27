@@ -134,7 +134,7 @@ export default function WelcomeOverlay({ displayName, role, avatar, onClose }: W
                   <span className="announcement-name">Bypass Related</span>
                   <span className="announcement-date">7/20/2026</span>
                 </div>
-                <p className="announcement-desc">All admins Please don't use GTCUIDBypass Wait For Update.</p>
+                <p className="announcement-desc">All admins Please don't use MANI 272 Wait For Update.</p>
               </div>
 
               <div className="announcement-item">
@@ -143,7 +143,7 @@ export default function WelcomeOverlay({ displayName, role, avatar, onClose }: W
                   <span className="announcement-name">WebsiteUpdate</span>
                   <span className="announcement-date">7/6/2026</span>
                 </div>
-                <p className="announcement-desc">Updated GTCUIDBypass Website Theme and assets layout.</p>
+                <p className="announcement-desc">Updated MANI 272 Website Theme and assets layout.</p>
               </div>
 
             </div>
