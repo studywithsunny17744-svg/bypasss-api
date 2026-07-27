@@ -4,7 +4,7 @@
   "description": "White-Label API & Reseller Command Suite",
   "main": "dist/server.js",
   "scripts": {
-    "postinstall": "cd frontend && npm install",
+    "postinstall": "cd frontend && npm install && cd .. && npm run build",
     "build-frontend": "cd frontend && npm run build",
     "build-backend": "npx tsc",
     "build": "npm run build-frontend && npm run build-backend",
