@@ -1725,6 +1725,10 @@ export default function App() {
                             <input type="number" step="0.1" className="glow-input" value={genResellerCredits} onChange={e => setGenResellerCredits(e.target.value)} required />
                           </div>
                           <div>
+                            <label style={{ display: 'block', fontSize: '11px', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '6px' }}>Expiry Date (Optional)</label>
+                            <input type="date" className="glow-input" value={genResellerExpiry} onChange={e => setGenResellerExpiry(e.target.value)} />
+                          </div>
+                          <div>
                             <button type="submit" className="btn-neon btn-neon-green" style={{ width: '100%', fontSize: '13px' }}>
                               MINT PROFILE
                             </button>
@@ -1754,6 +1758,7 @@ export default function App() {
                                 <th>Credits Coins</th>
                                 <th>Requests</th>
                                 <th>Created On</th>
+                                <th>Expiry</th>
                                 <th>Status</th>
                                 <th>Actions</th>
                               </tr>
@@ -1769,6 +1774,7 @@ export default function App() {
                                   <td style={{ fontWeight: 600, color: 'var(--accent-green)' }}>{res.credits.toFixed(2)}</td>
                                   <td>{res.requests_count}</td>
                                   <td style={{ fontSize: '10px' }}>{res.created_at}</td>
+                                  <td style={{ fontSize: '10px', color: 'var(--accent-cyan)' }}>{res.expiry || 'Lifetime'}</td>
                                   <td>
                                     <span className={`status-badge ${res.is_active ? 'status-badge-active' : 'status-badge-suspended'}`}>
                                       {res.is_active ? 'Active' : 'Suspended'}
@@ -1787,6 +1793,9 @@ export default function App() {
                                       </button>
                                       <button className="btn-neon btn-neon-purple" style={{ padding: '4px 6px', fontSize: '10px' }} onClick={() => handleUpdateResellerLimit(res.key, res.max_uids)}>
                                         Adjust Limit
+                                      </button>
+                                      <button className="btn-neon btn-neon-purple" style={{ padding: '4px 6px', fontSize: '10px' }} onClick={() => handleUpdateResellerExpiry(res.key, res.expiry)}>
+                                        Adjust Expiry
                                       </button>
                                       <button className="btn-neon btn-neon-red" style={{ padding: '4px 6px', fontSize: '10px' }} onClick={() => handleDeleteReseller(res.key)}>
                                         Delete
@@ -2080,7 +2089,7 @@ axios.post('http://localhost:3000/api/uids/remove', {
                       </div>
                       <div>
                         <label style={{ display: 'block', fontSize: '11px', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '8px', fontWeight: 600 }}>Role</label>
-                        <input type="text" className="glow-input" value={stats.isMaster ? 'Administrator' : 'Normal'} readOnly style={{ color: '#fff', cursor: 'default' }} />
+                        <input type="text" className="glow-input" value={stats.isMaster ? 'Administrator' : 'Reseller'} readOnly style={{ color: '#fff', cursor: 'default' }} />
                       </div>
                     </div>
 
