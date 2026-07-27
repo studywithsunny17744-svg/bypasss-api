@@ -1,0 +1,26 @@
+services:
+  - type: web
+    name: uid-bypass-dashboard
+    env: node
+    plan: free
+    buildCommand: npm run build
+    startCommand: npm start
+    envVars:
+      - key: PORT
+        value: 10000
+      - key: ADMIN_USERNAME
+        value: admin
+      - key: ADMIN_PASSWORD
+        value: admin
+      - key: API_KEY
+        value: GTCAPI-872F834050A1C868448EC5B45275D704
+      - key: BASE_URL
+        value: https://gtccheats.xyz/Api/uidbypassapi/api_user.php
+      - key: MASTER_ADMIN_ID
+        value: 1457931837769908467
+      - key: API_KEY_PREFIX
+        value: Mani272
+      - key: APP_BRAND_NAME
+        value: Mani272 API
+      - key: LOG_WEBHOOK_URL
+        value: https://discord.com/api/webhooks/1522244617607843941/bRh6RYuLAPKYFnelDs2d5a18bc3CR1Z3UfFTbj4oZhZmzdhXAK8ew7DFRx2CmRT4qJb6
