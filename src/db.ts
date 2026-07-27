@@ -28,6 +28,7 @@ export interface ApiKeyInfo {
   displayName?: string;
   avatar?: string;
   bot_config?: BotConfig;
+  expiry?: string;
 }
 
 export interface ActivityLog {
@@ -389,7 +390,8 @@ export function createApiKeyEntry(
   ownerId: string | number, 
   maxUids: number = 100,
   username?: string,
-  password?: string
+  password?: string,
+  expiry?: string
 ): void {
   const db = loadDb();
   if (!db.api_keys) {
@@ -409,7 +411,8 @@ export function createApiKeyEntry(
     max_uids: maxUids,
     uids: {},
     username: username || '',
-    password: password || ''
+    password: password || '',
+    expiry: expiry || ''
   };
   
   saveDb(db);

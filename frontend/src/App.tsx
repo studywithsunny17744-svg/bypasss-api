@@ -152,6 +152,8 @@ export default function App() {
   const [brandLogo, setBrandLogo] = useState('');
   const [deployConsoleLogs, setDeployConsoleLogs] = useState<string[]>([]);
   const [isDeployingBot, setIsDeployingBot] = useState(false);
+  const [userExpiry, setUserExpiry] = useState('Lifetime');
+  const [genResellerExpiry, setGenResellerExpiry] = useState('');
 
   // Auto-dismiss Alerts
   useEffect(() => {
@@ -211,6 +213,9 @@ export default function App() {
         } else {
           setBotActive(false);
           setBotSuspendedReason('');
+        }
+        if (result.expiry) {
+          setUserExpiry(result.expiry);
         }
         
         if (result.isMaster) {

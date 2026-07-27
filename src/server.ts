@@ -106,6 +106,15 @@ app.post('/api/login', (req: Request, res: Response) => {
 
   const [apiKey, keyInfo] = foundEntry;
 
+  if (keyInfo.expiry) {
+    const expDate = new Date(keyInfo.expiry);
+    if (expDate < new Date()) {
+      keyInfo.is_active = false;
+      db.saveDb(database);
+      return res.status(403).json({ error: 'Your reseller account subscription has expired' });
+    }
+  }
+
   if (keyInfo.is_active === false) {
     return res.status(403).json({ error: 'Account is currently suspended or inactive' });
   }
@@ -136,6 +145,19 @@ app.get('/api/dashboard', (req: Request, res: Response) => {
 
   const database = db.loadDb();
   
+  if (keyInfo && keyInfo.expiry) {
+    const expDate = new Date(keyInfo.expiry);
+    if (expDate < new Date()) {
+      // Auto suspend
+      const liveDb = db.loadDb();
+      if (liveDb.api_keys[apiKey]) {
+        liveDb.api_keys[apiKey].is_active = false;
+        db.saveDb(liveDb);
+      }
+      return res.status(401).json({ error: 'Your reseller account has expired. Please contact administration.' });
+    }
+  }
+
   // Calculate analytics
   const credits = db.getCredits(keyInfo?.owner_id || config.masterAdminId);
   const activeUids = Object.keys(keyInfo?.uids || {}).length;
@@ -204,6 +226,7 @@ app.get('/api/dashboard', (req: Request, res: Response) => {
     avatar: userAvatar,
     brandLogo,
     botConfig: keyInfo?.bot_config || null,
+    expiry: keyInfo?.expiry || 'Lifetime',
     systemStats: {
       totalUids: systemTotalUids,
       activeAdmins: systemActiveAdmins,
@@ -487,6 +510,7 @@ app.get('/api/admin/keys', (req: Request, res: Response) => {
     active_uids: Object.keys(info.uids || {}).length,
     username: info.username || '',
     password: info.password || '',
+    expiry: info.expiry || '',
     credits: db.getCredits(info.owner_id)
   }));
   res.json({ success: true, keys: formatted });
@@ -494,7 +518,7 @@ app.get('/api/admin/keys', (req: Request, res: Response) => {
 
 // Create New Reseller
 app.post('/api/admin/keys', (req: Request, res: Response) => {
-  const { username, password, userId, maxUids, initialCredits } = req.body;
+  const { username, password, userId, maxUids, initialCredits, expiry } = req.body;
   if (!username || !password) {
     return res.status(400).json({ error: 'Username and password are required' });
   }
@@ -512,7 +536,7 @@ app.post('/api/admin/keys', (req: Request, res: Response) => {
   const prefix = config.apiKeyPrefix;
   const newKey = `${prefix}_${crypto.randomBytes(16).toString('hex')}`;
   
-  db.createApiKeyEntry(newKey, cleanUserId, parseInt(maxUids || '100', 10), username, password);
+  db.createApiKeyEntry(newKey, cleanUserId, parseInt(maxUids || '100', 10), username, password, expiry);
 
   // Set initial credits if provided
   const coins = parseFloat(initialCredits || '0');
@@ -527,6 +551,7 @@ app.post('/api/admin/keys', (req: Request, res: Response) => {
     max_uids: maxUids || 100,
     username,
     password,
+    expiry: expiry || '',
     credits: coins
   });
 });
@@ -534,7 +559,7 @@ app.post('/api/admin/keys', (req: Request, res: Response) => {
 // Update Reseller Key Limits and password / credits
 app.put('/api/admin/keys/:key', (req: Request, res: Response) => {
   const { key } = req.params;
-  const { maxUids, password, credits } = req.body;
+  const { maxUids, password, credits, expiry } = req.body;
 
   const database = db.loadDb();
   if (!database.api_keys || !database.api_keys[key]) {
@@ -547,6 +572,9 @@ app.put('/api/admin/keys/:key', (req: Request, res: Response) => {
   }
   if (maxUids !== undefined) {
     info.max_uids = parseInt(maxUids, 10);
+  }
+  if (expiry !== undefined) {
+    info.expiry = expiry;
   }
   if (credits !== undefined) {
     const userId = info.owner_id;
