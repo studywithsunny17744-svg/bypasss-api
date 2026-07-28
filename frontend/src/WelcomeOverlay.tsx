@@ -5,11 +5,10 @@ import './WelcomeOverlay.css';
 interface WelcomeOverlayProps {
   displayName: string;
   role: string;
-  avatar?: string;
   onClose: () => void;
 }
 
-export default function WelcomeOverlay({ displayName, role, avatar, onClose }: WelcomeOverlayProps) {
+export default function WelcomeOverlay({ displayName, role, onClose }: WelcomeOverlayProps) {
   const containerRef = useRef<HTMLDivElement>(null);
 
   // Logo SVG matches the main sidebar avatar brand icon
@@ -32,10 +31,10 @@ export default function WelcomeOverlay({ displayName, role, avatar, onClose }: W
       </div>
 
       <div className="welcome-overlay-content">
-        
+
         {/* LEFT COLUMN: Hanging Lanyard and Draggable ID Card */}
         <div className="welcome-badge-column">
-          
+
           {/* Lanyard String & Clip - Visual anchors */}
           <div className="lanyard-thread" />
           <div className="lanyard-clip" />
@@ -72,27 +71,9 @@ export default function WelcomeOverlay({ displayName, role, avatar, onClose }: W
             </div>
 
             <div className="badge-photo-slot">
-              {avatar ? (
-                <img 
-                  src={avatar} 
-                  alt="Avatar" 
-                  className="slot-avatar-img" 
-                  onError={(e) => {
-                    (e.target as HTMLElement).style.display = 'none';
-                    const parent = (e.target as HTMLElement).parentElement;
-                    if (parent && !parent.querySelector('.slot-avatar')) {
-                      const fallback = document.createElement('div');
-                      fallback.className = 'slot-avatar';
-                      fallback.innerText = role === 'Administrator' ? 'A' : 'R';
-                      parent.appendChild(fallback);
-                    }
-                  }}
-                />
-              ) : (
-                <div className="slot-avatar">
-                  {role === 'Administrator' ? 'A' : 'R'}
-                </div>
-              )}
+              <div className="slot-avatar">
+                {role === 'Administrator' ? 'A' : 'R'}
+              </div>
             </div>
 
             <div className="badge-footer-info">
@@ -103,7 +84,7 @@ export default function WelcomeOverlay({ displayName, role, avatar, onClose }: W
                 {role}
               </div>
             </div>
-            
+
             <div className="badge-barcode">
               <div className="bar" style={{ width: '4px' }} />
               <div className="bar" style={{ width: '1px' }} />
@@ -132,7 +113,7 @@ export default function WelcomeOverlay({ displayName, role, avatar, onClose }: W
             </div>
 
             <div className="announcements-list">
-              
+
               <div className="announcement-item">
                 <div className="announcement-meta">
                   <span className="bullet-active" />
@@ -148,7 +129,7 @@ export default function WelcomeOverlay({ displayName, role, avatar, onClose }: W
                   <span className="announcement-name">Bypass Related</span>
                   <span className="announcement-date">7/20/2026</span>
                 </div>
-                <p className="announcement-desc">All admins Please don't use MANI 272 Wait For Update.</p>
+                <p className="announcement-desc">All admins Please don't use Mani 272 Wait For Update.</p>
               </div>
 
               <div className="announcement-item">
@@ -157,7 +138,7 @@ export default function WelcomeOverlay({ displayName, role, avatar, onClose }: W
                   <span className="announcement-name">WebsiteUpdate</span>
                   <span className="announcement-date">7/6/2026</span>
                 </div>
-                <p className="announcement-desc">Updated MANI 272 Website Theme and assets layout.</p>
+                <p className="announcement-desc">Updated Mani 272 Website Theme and assets layout.</p>
               </div>
 
             </div>
