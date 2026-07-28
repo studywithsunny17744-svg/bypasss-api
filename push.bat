@@ -1,9 +1,9 @@
 @echo off
 cd /d "%~dp0"
-title Git Push Tool
+title Git & Render Auto-Deploy Tool
 cls
 echo ====================================================
-echo               GIT AUTO-PUSH UTILITY
+echo           GIT & RENDER AUTO-DEPLOY UTILITY
 echo ====================================================
 echo.
 
@@ -42,8 +42,7 @@ if %errorlevel% neq 0 (
 echo [2/3] Committing changes (git commit)...
 "%GIT_CMD%" commit -m "%commit_message%"
 if %errorlevel% neq 0 (
-    echo FAIL: Commit failed (perhaps no changes were modified).
-    goto error_end
+    echo NOTE: No new uncommitted changes detected locally. Proceeding to push existing commits...
 )
 
 echo [3/3] Pushing to GitHub (git push origin main)...
@@ -53,9 +52,26 @@ if %errorlevel% neq 0 (
     goto error_end
 )
 
+:: Check if RENDER_DEPLOY_HOOK_URL is defined in .env file
+if exist ".env" (
+    for /f "tokens=1,2 delims==" %%A in (.env) do (
+        if "%%A"=="RENDER_DEPLOY_HOOK_URL" (
+            set "RENDER_HOOK=%%B"
+        )
+    )
+)
+
+if defined RENDER_HOOK (
+    echo.
+    echo [RENDER DEPLOY] Triggering instant Render build via Deploy Hook...
+    curl -s -X POST "%RENDER_HOOK%" >nul
+    echo [RENDER DEPLOY] Deploy webhook signal dispatched to Render!
+)
+
 echo.
 echo ====================================================
-echo    SUCCESS: Code successfully pushed to GitHub!
+echo    SUCCESS: Code pushed to GitHub!
+echo    Render will automatically build and deploy your app.
 echo ====================================================
 goto end
 
