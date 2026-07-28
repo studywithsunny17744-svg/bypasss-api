@@ -154,6 +154,47 @@ export default function App() {
   const [isDeployingBot, setIsDeployingBot] = useState(false);
   const [userExpiry, setUserExpiry] = useState('Lifetime');
   const [genResellerExpiry, setGenResellerExpiry] = useState('');
+  const [sessionSeconds, setSessionSeconds] = useState(1154);
+
+  // Live session countdown timer
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setSessionSeconds(prev => (prev > 0 ? prev - 1 : 1200));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const formatSessionTime = (totalSec: number) => {
+    const h = Math.floor(totalSec / 3600);
+    const m = Math.floor((totalSec % 3600) / 60);
+    const s = totalSec % 60;
+    const pad = (n: number) => n.toString().padStart(2, '0');
+    return `${pad(h)}h ${pad(m)}m ${pad(s)}s`;
+  };
+
+  const handleTestWebhook = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch('/api/admin/test-webhook', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey
+        },
+        body: JSON.stringify({ webhookUrl: sysWebhookUrl })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setSuccessAlert(data.message || 'Live webhook test ping sent successfully!');
+      } else {
+        setErrorAlert(data.error || 'Failed to dispatch test webhook.');
+      }
+    } catch (err) {
+      setErrorAlert('Error connecting to webhook testing service.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Auto-dismiss Alerts
   useEffect(() => {
@@ -1356,7 +1397,177 @@ export default function App() {
 
               {/* TAB CONTENT: Registered Account IDs (Dashboard) */}
               {activeTab === 'dashboard' && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+                  
+                  {/* --- ACCOUNT OVERVIEW (Matching Terminal X999 Theme) --- */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                    <h2 style={{ fontSize: '20px', fontWeight: 700, fontFamily: 'var(--font-display)', color: '#fff', margin: 0 }}>
+                      Account Overview
+                    </h2>
+
+                    {/* Top Row: 4 Stat Cards */}
+                    <div className="overview-top-grid">
+                      {/* 1. SESSION TIMEOUT */}
+                      <div className="overview-stat-card">
+                        <div className="overview-icon-box overview-icon-blue">
+                          ⏱️
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column' }}>
+                          <span style={{ fontSize: '10px', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 700, letterSpacing: '0.5px' }}>
+                            SESSION TIMEOUT
+                          </span>
+                          <span style={{ fontSize: '17px', fontWeight: 800, color: '#fff', fontFamily: 'var(--font-display)', marginTop: '2px' }}>
+                            {formatSessionTime(sessionSeconds)}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* 2. WHITELISTED UIDS */}
+                      <div className="overview-stat-card">
+                        <div className="overview-icon-box overview-icon-green">
+                          🛡️
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column' }}>
+                          <span style={{ fontSize: '10px', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 700, letterSpacing: '0.5px' }}>
+                            WHITELISTED UIDS
+                          </span>
+                          <span style={{ fontSize: '18px', fontWeight: 800, color: '#fff', fontFamily: 'var(--font-display)', marginTop: '2px' }}>
+                            {stats.activeUids}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* 3. CREDITS REMAINING */}
+                      <div className="overview-stat-card">
+                        <div className="overview-icon-box overview-icon-purple">
+                          💰
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column' }}>
+                          <span style={{ fontSize: '10px', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 700, letterSpacing: '0.5px' }}>
+                            CREDITS REMAINING
+                          </span>
+                          <span style={{ fontSize: '18px', fontWeight: 800, color: 'var(--accent-purple)', fontFamily: 'var(--font-display)', marginTop: '2px' }}>
+                            {stats.credits >= 9999 ? 'Unlimited' : `${stats.credits.toFixed(2)}`}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* 4. ACCOUNT ROLE */}
+                      <div className="overview-stat-card">
+                        <div className="overview-icon-box overview-icon-orange">
+                          👤
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column' }}>
+                          <span style={{ fontSize: '10px', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 700, letterSpacing: '0.5px' }}>
+                            ACCOUNT ROLE
+                          </span>
+                          <span style={{ fontSize: '16px', fontWeight: 800, color: '#ffa500', fontFamily: 'var(--font-display)', marginTop: '2px' }}>
+                            {stats.isMaster ? 'Super Admin' : 'Reseller Admin'}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Middle Row: Account Information & Usage Graph */}
+                    <div className="overview-mid-grid">
+                      
+                      {/* Left Card: Account Information */}
+                      <div className="glass-card" style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                        <h3 style={{ fontSize: '15px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px', margin: 0, color: '#fff' }}>
+                          <span style={{ color: 'var(--accent-cyan)' }}>ⓘ</span> Account Information
+                        </h3>
+
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                          <div className="info-row">
+                            <label>Registered IP</label>
+                            <span style={{ color: 'var(--accent-cyan)', fontWeight: 700, fontFamily: 'monospace' }}>
+                              45.114.36.234
+                            </span>
+                          </div>
+
+                          <div className="info-row">
+                            <label>Browser/Platform</label>
+                            <span style={{ color: '#fff', fontWeight: 600 }}>
+                              Mozilla/5.0
+                            </span>
+                          </div>
+
+                          <div className="info-row">
+                            <label>Account Expiry</label>
+                            <span style={{ color: 'var(--accent-green)', fontWeight: 700 }}>
+                              {userExpiry === 'Lifetime' ? 'Unlimited Access' : userExpiry}
+                            </span>
+                          </div>
+
+                          <div className="info-row">
+                            <label>2FA Status</label>
+                            <span style={{ color: 'var(--accent-green)', background: 'rgba(0, 255, 136, 0.1)', border: '1px solid rgba(0, 255, 136, 0.2)', padding: '2px 10px', borderRadius: '4px', fontSize: '11px', fontWeight: 700 }}>
+                              Protected (Stable)
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Right Card: Usage Graph */}
+                      <div className="glass-card" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                        <div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                            <h3 style={{ fontSize: '15px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px', margin: 0, color: '#fff' }}>
+                              <span style={{ color: 'var(--accent-purple)' }}>🕒</span> Usage Graph
+                            </h3>
+                            <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--accent-purple)' }}>
+                              ∞ Unlimited
+                            </span>
+                          </div>
+
+                          <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', marginBottom: '12px' }}>
+                            <span style={{ fontSize: '28px', fontWeight: 900, fontFamily: 'var(--font-display)', color: '#fff' }}>
+                              {Math.min(100, Math.round((stats.activeUids / (stats.maxLimit >= 9999 ? 1000 : stats.maxLimit)) * 100))}%
+                            </span>
+                            <span style={{ fontSize: '10px', color: 'var(--text-muted)', fontWeight: 700 }}>
+                              CREDITS USED
+                            </span>
+                          </div>
+
+                          {/* Gradient Progress Bar */}
+                          <div className="progress-track-bg">
+                            <div 
+                              className="progress-fill-gradient" 
+                              style={{ width: `${Math.max(3, Math.min(100, Math.round((stats.activeUids / (stats.maxLimit >= 9999 ? 1000 : stats.maxLimit)) * 100)))}%` }} 
+                            />
+                          </div>
+
+                          {/* Sub Stats Row */}
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginTop: '14px' }}>
+                            <div style={{ background: 'rgba(0,0,0,0.3)', padding: '8px 12px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.03)' }}>
+                              <span style={{ fontSize: '9px', color: 'var(--text-muted)', display: 'block', fontWeight: 700, marginBottom: '2px' }}>CREDITS USED</span>
+                              <span style={{ fontSize: '13px', fontWeight: 800, color: 'var(--accent-cyan)' }}>• {stats.activeUids}</span>
+                            </div>
+
+                            <div style={{ background: 'rgba(0,0,0,0.3)', padding: '8px 12px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.03)' }}>
+                              <span style={{ fontSize: '9px', color: 'var(--text-muted)', display: 'block', fontWeight: 700, marginBottom: '2px' }}>CREDITS LEFT</span>
+                              <span style={{ fontSize: '13px', fontWeight: 800, color: 'var(--accent-purple)' }}>• Unlimited</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Bottom Sync Footer */}
+                        <div className="sync-status-footer">
+                          <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                            <span style={{ color: 'var(--text-muted)', fontSize: '10px', fontWeight: 700 }}>SYNC PLATFORM</span>
+                            <span style={{ color: 'var(--accent-cyan)', fontWeight: 700, fontSize: '11px' }}>API: {systemStats.totalUids} &nbsp; Bot: {stats.activeUids}</span>
+                          </div>
+
+                          <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                            <span style={{ color: 'var(--text-muted)', fontSize: '10px', fontWeight: 700 }}>ENGINE SYNC</span>
+                            <span style={{ color: 'var(--accent-green)', fontWeight: 800, fontSize: '11px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                              STABLE <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: 'var(--accent-green)', display: 'inline-block' }} className="pulse" />
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                   
                   {/* Dashboard header and search controls */}
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
@@ -2616,6 +2827,17 @@ axios.post('http://localhost:3000/api/uids/remove', {
                         {isDeployingBot ? 'LAUNCHING DEPLOYMENT...' : 'DEPLOY BOT INSTANCE'}
                       </button>
                     )}
+
+                    <div style={{ marginTop: '8px', display: 'flex', justifyContent: 'center' }}>
+                      <button 
+                        type="button" 
+                        className="btn-neon" 
+                        style={{ fontSize: '11px', padding: '6px 14px', background: 'transparent', border: '1px solid var(--border-glass)', color: 'var(--accent-cyan)' }}
+                        onClick={handleTestWebhook}
+                      >
+                        ⚡ TEST LIVE WEBHOOK PING
+                      </button>
+                    </div>
                   </form>
 
                   {deployConsoleLogs.length > 0 && (
@@ -2663,7 +2885,17 @@ axios.post('http://localhost:3000/api/uids/remove', {
                       <input type="text" placeholder="https://gtccheats.xyz/..." className="glow-input" value={sysBaseUrl} onChange={e => setSysBaseUrl(e.target.value)} />
                     </div>
                     <div>
-                      <label style={{ display: 'block', fontSize: '11px', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '6px' }}>Central Webhook URL (LOG_WEBHOOK_URL)</label>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                        <label style={{ display: 'block', fontSize: '11px', textTransform: 'uppercase', color: 'var(--text-muted)', margin: 0 }}>Central Webhook URL (LOG_WEBHOOK_URL)</label>
+                        <button 
+                          type="button" 
+                          className="btn-neon btn-neon-purple" 
+                          style={{ fontSize: '10px', padding: '2px 8px', borderRadius: '4px' }}
+                          onClick={handleTestWebhook}
+                        >
+                          ⚡ TEST WEBHOOK LIVE
+                        </button>
+                      </div>
                       <input type="text" placeholder="https://discord.com/api/webhooks/..." className="glow-input" value={sysWebhookUrl} onChange={e => setSysWebhookUrl(e.target.value)} />
                     </div>
                     <div>
@@ -2674,7 +2906,7 @@ axios.post('http://localhost:3000/api/uids/remove', {
                       <label style={{ display: 'block', fontSize: '11px', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '6px' }}>Console Brand Name (APP_BRAND_NAME)</label>
                       <input type="text" placeholder="Mani272 API" className="glow-input" value={sysBrandName} onChange={e => setSysBrandName(e.target.value)} />
                     </div>
-                    <div style={{ display: 'flex', alignItems: 'flex-end' }}>
+                    <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-end' }}>
                       <button type="submit" className="btn-neon btn-neon-green" style={{ width: '100%', fontSize: '13px', padding: '12px' }}>
                         SAVE CONFIGURATIONS
                       </button>

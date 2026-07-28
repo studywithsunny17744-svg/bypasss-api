@@ -644,6 +644,51 @@ app.post('/api/admin/env', (req: Request, res: Response) => {
   }
 });
 
+// Live Webhook Testing Route
+app.post('/api/admin/test-webhook', async (req: Request, res: Response) => {
+  const apiKey = req.headers['x-api-key'] as string;
+  if (!apiKey) return res.status(401).json({ error: 'API key is required' });
+
+  const targetWebhookUrl = req.body.webhookUrl?.trim() || process.env.LOG_WEBHOOK_URL || '';
+  if (!targetWebhookUrl) {
+    return res.status(400).json({ error: 'Webhook URL is missing. Please provide a valid HTTP/Discord Webhook URL.' });
+  }
+
+  try {
+    const payload = {
+      content: '⚡ **MANI272 Bypass Engine — Webhook Integration Test**',
+      embeds: [
+        {
+          title: '🟢 Webhook Connection Test Successful!',
+          description: 'This is an immediate live diagnostic test ping sent from your **UID Manager Command Suite**.',
+          color: 65416,
+          fields: [
+            { name: 'Status', value: '✅ ACTIVE & FUNCTIONAL', inline: true },
+            { name: 'Timestamp', value: new Date().toLocaleString(), inline: true },
+            { name: 'Engine Sync', value: 'STABLE • Edge Proxy Gateway', inline: false }
+          ],
+          footer: { text: 'MANI272 Command Suite • Real-time Webhook Diagnostics' }
+        }
+      ]
+    };
+
+    const webhookRes = await fetch(targetWebhookUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    if (webhookRes.ok || webhookRes.status === 204) {
+      return res.json({ success: true, message: 'Live Webhook test message dispatched successfully! Check your channel.' });
+    } else {
+      const errText = await webhookRes.text().catch(() => '');
+      return res.status(400).json({ error: `Webhook endpoint returned HTTP ${webhookRes.status}: ${errText.slice(0, 100)}` });
+    }
+  } catch (err: any) {
+    return res.status(500).json({ error: `Failed to dispatch live webhook ping: ${err.message}` });
+  }
+});
+
 // Reseller Bot Hosting Routes
 app.get('/api/bot/status', (req: Request, res: Response) => {
   const apiKey = req.headers['x-api-key'] as string;
