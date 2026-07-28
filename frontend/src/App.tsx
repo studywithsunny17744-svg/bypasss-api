@@ -2148,14 +2148,14 @@ export default function App() {
                       <h4 style={{ fontSize: '14px', marginBottom: '8px' }}>1. Add/Whitelist UID Node (POST)</h4>
                       <div className="code-container">
                         {docSnippetLang === 'curl' ? (
-`curl -X POST http://localhost:3000/api/uids/add \\
+`curl -X POST ${typeof window !== 'undefined' ? window.location.origin : 'https://bypasss-api.onrender.com'}/api/uids/add \\
   -H "Content-Type: application/json" \\
   -H "x-api-key: ${apiKey || 'sk_your_api_key'}" \\
   -d '{"uid": "51240182", "days": 30}'`
                         ) : docSnippetLang === 'python' ? (
 `import requests
 
-url = "http://localhost:3000/api/uids/add"
+url = "${typeof window !== 'undefined' ? window.location.origin : 'https://bypasss-api.onrender.com'}/api/uids/add"
 headers = {
     "x-api-key": "${apiKey || 'sk_your_api_key'}",
     "Content-Type": "application/json"
@@ -2170,7 +2170,7 @@ print(response.json())`
                         ) : (
 `const axios = require('axios');
 
-axios.post('http://localhost:3000/api/uids/add', {
+axios.post('${typeof window !== 'undefined' ? window.location.origin : 'https://bypasss-api.onrender.com'}/api/uids/add', {
   uid: '51240182',
   days: 30
 }, {
@@ -2186,14 +2186,14 @@ axios.post('http://localhost:3000/api/uids/add', {
                       <h4 style={{ fontSize: '14px', marginBottom: '8px' }}>2. Terminate/Remove UID Node (POST)</h4>
                       <div className="code-container">
                         {docSnippetLang === 'curl' ? (
-`curl -X POST http://localhost:3000/api/uids/remove \\
+`curl -X POST ${typeof window !== 'undefined' ? window.location.origin : 'https://bypasss-api.onrender.com'}/api/uids/remove \\
   -H "Content-Type: application/json" \\
   -H "x-api-key: ${apiKey || 'sk_your_api_key'}" \\
   -d '{"uid": "51240182"}'`
                         ) : docSnippetLang === 'python' ? (
 `import requests
 
-url = "http://localhost:3000/api/uids/remove"
+url = "${typeof window !== 'undefined' ? window.location.origin : 'https://bypasss-api.onrender.com'}/api/uids/remove"
 headers = {
     "x-api-key": "${apiKey || 'sk_your_api_key'}",
     "Content-Type": "application/json"
@@ -2207,7 +2207,7 @@ print(response.json())`
                         ) : (
 `const axios = require('axios');
 
-axios.post('http://localhost:3000/api/uids/remove', {
+axios.post('${typeof window !== 'undefined' ? window.location.origin : 'https://bypasss-api.onrender.com'}/api/uids/remove', {
   uid: '51240182'
 }, {
   headers: { 'x-api-key': '${apiKey || 'sk_your_api_key'}' }
