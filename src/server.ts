@@ -405,7 +405,7 @@ app.post('/api/uids/replace', async (req: Request, res: Response) => {
   }
 });
 
-// 7. Voucher Creation Route
+// 7. Voucher Creation Route (Master Admin Only)
 app.post('/api/vouchers/create', (req: Request, res: Response) => {
   const apiKey = req.headers['x-api-key'] as string;
   const { amount, days } = req.body;
@@ -413,28 +413,20 @@ app.post('/api/vouchers/create', (req: Request, res: Response) => {
   if (!apiKey) return res.status(401).json({ error: 'API key is required' });
 
   const isMasterKey = isMaster(apiKey);
-  const keyInfo = db.getApiKeyInfo(apiKey);
 
-  if (!isMasterKey && !keyInfo) return res.status(401).json({ error: 'Unauthorized key' });
+  if (!isMasterKey) {
+    return res.status(403).json({ error: 'Only administrators are permitted to generate gift vouchers.' });
+  }
 
   const numCoins = parseFloat(amount || '0');
   const numDays = parseInt(days || '0', 10);
 
   if (numCoins <= 0 && numDays <= 0) {
-    return res.status(400).json({ error: 'Voucher must contain coins or days value' });
-  }
-
-  // Deduct balance from reseller (Master Admin is exempt)
-  if (!isMasterKey && numCoins > 0) {
-    const balance = db.getCredits(keyInfo!.owner_id);
-    if (balance < numCoins) {
-      return res.status(400).json({ error: 'Insufficient reseller balance to wrap coins' });
-    }
-    db.removeCredits(keyInfo!.owner_id, numCoins);
+    return res.status(400).json({ error: 'Voucher must contain coins or days value.' });
   }
 
   const code = `GIFT-${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
-  db.createGiftVoucher(keyInfo?.owner_id || config.masterAdminId, code, numCoins, numDays);
+  db.createGiftVoucher(config.masterAdminId, code, numCoins, numDays);
 
   res.json({
     success: true,
@@ -793,8 +785,8 @@ app.post('/api/profile/update', (req: Request, res: Response) => {
     return res.status(401).json({ error: 'Invalid API authorization key' });
   }
 
-  if (displayName) keys[apiKey].displayName = displayName;
-  if (avatar) keys[apiKey].avatar = avatar;
+  if (displayName !== undefined) keys[apiKey].displayName = displayName;
+  if (avatar !== undefined) keys[apiKey].avatar = avatar;
 
   db.saveDb(database);
   res.json({

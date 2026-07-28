@@ -199,7 +199,7 @@ export default function App() {
         if (result.displayName) {
           setUserDisplayName(result.displayName);
         }
-        if (result.avatar) {
+        if (result.avatar !== undefined) {
           setUserAvatar(result.avatar);
         }
         if (result.brandLogo !== undefined) {
@@ -471,7 +471,7 @@ export default function App() {
       });
       const data = await res.json();
       if (res.ok && data.success) {
-        setSuccessAlert(data.message || 'Voucher claimed successfully!');
+        setSuccessAlert(data.message || 'Gift voucher redeemed successfully!');
         setClaimVoucherCode('');
         fetchDashboardData(apiKey);
       } else {
@@ -505,10 +505,10 @@ export default function App() {
         setGeneratedVoucherCode(data.code);
         setGenVoucherCoins('');
         setGenVoucherDays('');
-        setSuccessAlert(`Successfully wrapped coins into gift voucher!`);
+        setSuccessAlert(`Gift voucher created successfully!`);
         fetchDashboardData(apiKey);
       } else {
-        setErrorAlert(data.error || 'Voucher printing failed.');
+        setErrorAlert(data.error || 'Gift voucher creation failed.');
       }
     } catch (err) {
       setErrorAlert('Technical failure generating gift voucher.');
@@ -2149,41 +2149,43 @@ axios.post('http://localhost:3000/api/uids/remove', {
                     </form>
                   </div>
 
-                  {/* Create Voucher */}
-                  <div className="glass-card">
-                    <h3 style={{ fontSize: '16px', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}><GiftIcon /> Generate Gift Voucher</h3>
-                    <form onSubmit={handleCreateVoucher} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                      <div>
-                        <label style={{ display: 'block', fontSize: '11px', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '6px' }}>Credit Amount (Coins)</label>
-                        <input type="number" step="0.01" placeholder="Coins to wrap" className="glow-input" value={genVoucherCoins} onChange={e => setGenVoucherCoins(e.target.value)} />
-                      </div>
-                      <div>
-                        <label style={{ display: 'block', fontSize: '11px', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '6px' }}>Bonus Whitelist Days</label>
-                        <input type="number" placeholder="Bonus days (optional)" className="glow-input" value={genVoucherDays} onChange={e => setGenVoucherDays(e.target.value)} />
-                      </div>
-                      <button type="submit" className="btn-neon btn-neon-purple" style={{ fontSize: '13px' }}>
-                        MINT COINS GIFT VOUCHER
-                      </button>
-                    </form>
+                  {/* Generate Voucher (Master Admin Only) */}
+                  {isMasterState && (
+                    <div className="glass-card">
+                      <h3 style={{ fontSize: '16px', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}><GiftIcon /> Generate Gift Voucher</h3>
+                      <form onSubmit={handleCreateVoucher} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                        <div>
+                          <label style={{ display: 'block', fontSize: '11px', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '6px' }}>Credit Amount (Coins)</label>
+                          <input type="number" step="0.01" placeholder="Coins amount to credit" className="glow-input" value={genVoucherCoins} onChange={e => setGenVoucherCoins(e.target.value)} />
+                        </div>
+                        <div>
+                          <label style={{ display: 'block', fontSize: '11px', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '6px' }}>Bonus Whitelist Days</label>
+                          <input type="number" placeholder="Bonus days (optional)" className="glow-input" value={genVoucherDays} onChange={e => setGenVoucherDays(e.target.value)} />
+                        </div>
+                        <button type="submit" className="btn-neon btn-neon-purple" style={{ fontSize: '13px' }}>
+                          GENERATE GIFT VOUCHER
+                        </button>
+                      </form>
 
-                    {generatedVoucherCode && (
-                      <div style={{ marginTop: '12px', padding: '12px', background: 'rgba(155, 81, 224, 0.03)', border: '1px dashed var(--accent-purple)', borderRadius: '6px' }}>
-                        <div style={{ fontSize: '10px', color: 'var(--text-muted)', marginBottom: '4px' }}>GIFT CODE GENERATED</div>
-                        <code style={{ fontSize: '14px', color: 'var(--accent-purple)', fontWeight: 'bold' }}>{generatedVoucherCode}</code>
-                      </div>
-                    )}
-                  </div>
+                      {generatedVoucherCode && (
+                        <div style={{ marginTop: '12px', padding: '12px', background: 'rgba(155, 81, 224, 0.03)', border: '1px dashed var(--accent-purple)', borderRadius: '6px' }}>
+                          <div style={{ fontSize: '10px', color: 'var(--text-muted)', marginBottom: '4px' }}>GIFT VOUCHER CODE GENERATED</div>
+                          <code style={{ fontSize: '14px', color: 'var(--accent-purple)', fontWeight: 'bold' }}>{generatedVoucherCode}</code>
+                        </div>
+                      )}
+                    </div>
+                  )}
 
-                  {/* Redeem Voucher */}
+                  {/* Redeem Gift Voucher (Resellers & Admins) */}
                   <div className="glass-card">
                     <h3 style={{ fontSize: '16px', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}><GiftIcon /> Redeem Gift Voucher</h3>
                     <form onSubmit={handleClaimVoucher} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                       <div>
                         <label style={{ display: 'block', fontSize: '11px', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '6px' }}>Voucher Code</label>
-                        <input type="text" placeholder="GIFT-XXXX" className="glow-input" value={claimVoucherCode} onChange={e => setClaimVoucherCode(e.target.value)} required />
+                        <input type="text" placeholder="Enter voucher code (e.g. GIFT-XXXX)" className="glow-input" value={claimVoucherCode} onChange={e => setClaimVoucherCode(e.target.value)} required />
                       </div>
                       <button type="submit" className="btn-neon btn-neon-green" style={{ fontSize: '13px' }}>
-                        CLAIM CREDITS VALUE
+                        REDEEM GIFT VOUCHER
                       </button>
                     </form>
                   </div>

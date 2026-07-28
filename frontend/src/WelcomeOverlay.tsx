@@ -73,7 +73,21 @@ export default function WelcomeOverlay({ displayName, role, avatar, onClose }: W
 
             <div className="badge-photo-slot">
               {avatar ? (
-                <img src={avatar} alt="Avatar" className="slot-avatar-img" />
+                <img 
+                  src={avatar} 
+                  alt="Avatar" 
+                  className="slot-avatar-img" 
+                  onError={(e) => {
+                    (e.target as HTMLElement).style.display = 'none';
+                    const parent = (e.target as HTMLElement).parentElement;
+                    if (parent && !parent.querySelector('.slot-avatar')) {
+                      const fallback = document.createElement('div');
+                      fallback.className = 'slot-avatar';
+                      fallback.innerText = role === 'Administrator' ? 'A' : 'R';
+                      parent.appendChild(fallback);
+                    }
+                  }}
+                />
               ) : (
                 <div className="slot-avatar">
                   {role === 'Administrator' ? 'A' : 'R'}
