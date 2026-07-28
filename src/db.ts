@@ -214,43 +214,77 @@ export function addKeyUid(
 
 export function removeKeyUid(key: string, uid: string): boolean {
   const db = loadDb();
-  if (db.api_keys && db.api_keys[key]) {
-    const info = db.api_keys[key];
-    if (info.uids && info.uids[uid]) {
-      delete info.uids[uid];
-      saveDb(db);
-      return true;
+  if (!db.api_keys) return false;
+
+  // Master Admin can delete UID from any reseller key
+  if (isMaster(key)) {
+    let removed = false;
+    for (const k of Object.keys(db.api_keys)) {
+      if (db.api_keys[k].uids && db.api_keys[k].uids[uid]) {
+        delete db.api_keys[k].uids[uid];
+        removed = true;
+      }
     }
+    if (removed) saveDb(db);
+    return removed;
+  }
+
+  // Regular reseller: remove from their own key
+  if (db.api_keys[key] && db.api_keys[key].uids && db.api_keys[key].uids[uid]) {
+    delete db.api_keys[key].uids[uid];
+    saveDb(db);
+    return true;
   }
   return false;
 }
 
+export function removeUidGlobally(uid: string): boolean {
+  const db = loadDb();
+  if (!db.api_keys) return false;
+  let removed = false;
+  for (const k of Object.keys(db.api_keys)) {
+    if (db.api_keys[k].uids && db.api_keys[k].uids[uid]) {
+      delete db.api_keys[k].uids[uid];
+      removed = true;
+    }
+  }
+  if (removed) saveDb(db);
+  return removed;
+}
+
 export function replaceKeyUid(key: string, oldUid: string, newUid: string): boolean {
   const db = loadDb();
-  if (db.api_keys && db.api_keys[key]) {
-    const info = db.api_keys[key];
-    if (info.uids && info.uids[oldUid]) {
-      const oldInfo = info.uids[oldUid];
-      delete info.uids[oldUid];
-      
-      const addedOn = new Date();
-      const expiry = new Date();
-      expiry.setDate(addedOn.getDate() + (oldInfo.days || 30));
-      
-      const formatDate = (date: Date) => {
-        const pad = (n: number) => n.toString().padStart(2, '0');
-        return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
-      };
-      
-      info.uids[newUid] = {
-        added_on: formatDate(addedOn),
-        days: oldInfo.days || 30,
-        expiry: formatDate(expiry)
-      };
-      
-      saveDb(db);
-      return true;
-    }
+  if (!db.api_keys) return false;
+
+  let targetKey = key;
+  if (isMaster(key)) {
+    const foundKey = Object.keys(db.api_keys).find(k => db.api_keys[k]?.uids?.[oldUid]);
+    if (foundKey) targetKey = foundKey;
+  }
+
+  const targetObj = db.api_keys[targetKey];
+  if (targetObj && targetObj.uids && targetObj.uids[oldUid]) {
+    const oldInfo = targetObj.uids[oldUid];
+    delete targetObj.uids[oldUid];
+    
+    const addedOn = new Date();
+    const expiry = new Date();
+    expiry.setDate(addedOn.getDate() + (oldInfo.days || 30));
+    
+    const formatDate = (date: Date) => {
+      const pad = (n: number) => n.toString().padStart(2, '0');
+      return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+    };
+    
+    targetObj.uids[newUid] = {
+      added_on: formatDate(addedOn),
+      days: oldInfo.days || 30,
+      expiry: formatDate(expiry),
+      source: oldInfo.source || 'WEB_API'
+    };
+    
+    saveDb(db);
+    return true;
   }
   return false;
 }

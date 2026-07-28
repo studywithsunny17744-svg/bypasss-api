@@ -5,10 +5,11 @@ import './WelcomeOverlay.css';
 interface WelcomeOverlayProps {
   displayName: string;
   role: string;
+  avatar?: string;
   onClose: () => void;
 }
 
-export default function WelcomeOverlay({ displayName, role, onClose }: WelcomeOverlayProps) {
+export default function WelcomeOverlay({ displayName, role, avatar, onClose }: WelcomeOverlayProps) {
   const containerRef = useRef<HTMLDivElement>(null);
 
   // Logo SVG matches the main sidebar avatar brand icon
@@ -71,9 +72,13 @@ export default function WelcomeOverlay({ displayName, role, onClose }: WelcomeOv
             </div>
 
             <div className="badge-photo-slot">
-              <div className="slot-avatar">
-                {role === 'Administrator' ? 'A' : 'R'}
-              </div>
+              {avatar ? (
+                <img src={avatar} alt="Avatar" style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
+              ) : (
+                <div className="slot-avatar">
+                  {role === 'Administrator' ? 'A' : 'R'}
+                </div>
+              )}
             </div>
 
             <div className="badge-footer-info">

@@ -2,6 +2,7 @@ import { Client, GatewayIntentBits } from 'discord.js';
 import crypto from 'crypto';
 import * as db from './db';
 import { config } from './config';
+import { sendUpstreamRequest, isUpstreamSuccess } from './upstream';
 
 export class BotManager {
   private static clients = new Map<string, Client>();
@@ -174,12 +175,21 @@ export class BotManager {
           }));
 
         } else if (command === 'add') {
-          const uid = args[1];
-          const daysStr = args[2];
+          const uid = args[1]?.trim();
+          const daysStr = args[2]?.trim();
           if (!uid) {
             await message.reply(createEmbed({
               title: '❌ Command Syntax Error',
               description: 'Usage: `!add <uid> [days]` (e.g. `!add 51240182 30`)',
+              color: 0xFF3131
+            }));
+            return;
+          }
+
+          if (!/^\d+$/.test(uid)) {
+            await message.reply(createEmbed({
+              title: '❌ Invalid UID Format',
+              description: 'UID must contain numeric digits only.',
               color: 0xFF3131
             }));
             return;
@@ -195,10 +205,12 @@ export class BotManager {
             return;
           }
 
-          const activeCount = Object.keys(reseller?.uids || {}).length;
-          const limit = reseller?.max_uids || 9999;
+          const freshDb = db.loadDb();
+          const currentReseller = freshDb.api_keys[apiKey] || reseller;
+          const activeCount = Object.keys(currentReseller?.uids || {}).length;
+          const limit = currentReseller?.max_uids || 9999;
           
-          if (!isMasterAccount && activeCount >= limit && !reseller?.uids?.[uid]) {
+          if (!isMasterAccount && activeCount >= limit && !currentReseller?.uids?.[uid]) {
             await message.reply(createEmbed({
               title: '❌ Quota Limit Exceeded',
               description: `Your whitelist capacity limit of **${limit}** UIDs has been reached. Contact admin for upgrade.`,
@@ -208,38 +220,74 @@ export class BotManager {
             return;
           }
 
-          const added = db.addKeyUid(apiKey, uid, days, 'DISCORD_BOT');
-          if (added) {
+          // Check credit balance for reseller
+          const costs: Record<number, number> = { 1: 0.50, 7: 2.40, 15: 3.40, 30: 5.30, 36500: 50.00 };
+          const cost = costs[days] || (days * 0.50);
+
+          if (!isMasterAccount && currentReseller) {
+            const balance = db.getCredits(currentReseller.owner_id);
+            if (balance < cost) {
+              await message.reply(createEmbed({
+                title: '❌ Insufficient Credits Balance',
+                description: `Required: **${cost.toFixed(2)}** coins | Available: **${balance.toFixed(2)}** coins. Please recharge credits.`,
+                color: 0xFF3131
+              }));
+              this.addLog(apiKey, `[WARNING] Command !add failed: Insufficient balance (${balance.toFixed(2)} < ${cost.toFixed(2)}).`);
+              return;
+            }
+          }
+
+          // Forward to GDCC Upstream API
+          const isPhpApi = config.baseUrl.includes('api_user.php');
+          const pathSuffix = isPhpApi ? '?action=add' : '/add';
+          const payload = isPhpApi 
+            ? { account_id: parseInt(uid, 10), for_days: days }
+            : { uid, days, name: `DiscordBotNode_${uid}` };
+
+          this.addLog(apiKey, `[API] Dispatching upstream request to GDCC API for UID ${uid}...`);
+          const upstream = await sendUpstreamRequest('POST', pathSuffix, payload);
+          const isSuccess = isUpstreamSuccess(upstream);
+
+          if (isSuccess) {
+            if (!isMasterAccount && currentReseller) {
+              db.removeCredits(currentReseller.owner_id, cost);
+            }
+            db.incrementApiUsage(apiKey);
+            db.addKeyUid(apiKey, uid, days, 'DISCORD_BOT');
+
             const expDate = new Date();
             expDate.setDate(expDate.getDate() + days);
             
             await message.reply(createEmbed({
-              title: '✅ UID Whitelisted Successfully',
+              title: '✅ UID Whitelisted & Patched Upstream',
               color: 0x00FF88,
               fields: [
                 { name: 'Target Game UID', value: `\`${uid}\``, inline: true },
                 { name: 'Duration Allocated', value: `**${days}** Days`, inline: true },
                 { name: 'Source', value: '🤖 Discord Bot', inline: true },
-                { name: 'Expires On', value: `\`${expDate.toISOString().split('T')[0]}\``, inline: true }
+                { name: 'Expires On', value: `\`${expDate.toISOString().split('T')[0]}\``, inline: true },
+                { name: 'GDCC API Status', value: '🟢 Synchronized', inline: true }
               ]
             }));
-            this.addLog(apiKey, `[SUCCESS] UID ${uid} registered via Discord command for ${days} days.`);
+            this.addLog(apiKey, `[SUCCESS] UID ${uid} whitelisted in DB & GDCC API for ${days} days.`);
             
-            db.addActivityLog(0, reseller?.owner_id || config.masterAdminId, 'ADD_UID', uid, {
+            db.addActivityLog(0, currentReseller?.owner_id || config.masterAdminId, 'ADD_UID', uid, {
               platform: 'discord_bot',
               requested_days: days,
               author_id: authorId
             });
           } else {
+            const errorMsg = upstream.data?.error || upstream.data?.message || 'Upstream GDCC API server error occurred.';
             await message.reply(createEmbed({
-              title: '❌ Whitelisting Failed',
-              description: 'Failed to record UID into whitelisting engine database.',
+              title: '❌ GDCC API Whitelisting Failed',
+              description: `Upstream error: ${errorMsg}`,
               color: 0xFF3131
             }));
+            this.addLog(apiKey, `[ERROR] Command !add failed upstream for UID ${uid}: ${errorMsg}`);
           }
 
         } else if (command === 'remove') {
-          const uid = args[1];
+          const uid = args[1]?.trim();
           if (!uid) {
             await message.reply(createEmbed({
               title: '❌ Command Syntax Error',
@@ -249,46 +297,72 @@ export class BotManager {
             return;
           }
 
-          if (!reseller?.uids?.[uid]) {
+          const freshDb = db.loadDb();
+          const currentReseller = freshDb.api_keys[apiKey] || reseller;
+
+          // Main Admin has permission to delete ANY UID across all resellers
+          // Regular reseller can only delete UIDs in their active whitelist
+          let hasPermission = isMasterAccount;
+          if (!hasPermission && currentReseller?.uids?.[uid]) {
+            hasPermission = true;
+          }
+
+          if (!hasPermission) {
             await message.reply(createEmbed({
-              title: '❌ UID Not Found',
+              title: '❌ Access Denied / UID Not Found',
               description: `Target UID \`${uid}\` is not registered in your active whitelist.`,
               color: 0xFF3131
             }));
             return;
           }
 
-          const freshDb = db.loadDb();
-          if (freshDb.api_keys[apiKey]?.uids?.[uid]) {
-            delete freshDb.api_keys[apiKey].uids[uid];
-            db.saveDb(freshDb);
+          // Forward to GDCC Upstream API
+          const isPhpApi = config.baseUrl.includes('api_user.php');
+          const pathSuffix = isPhpApi ? '?action=remove' : '/remove';
+          const payload = isPhpApi ? { account_id: parseInt(uid, 10) } : { uid };
+
+          this.addLog(apiKey, `[API] Dispatching upstream removal request to GDCC API for UID ${uid}...`);
+          const upstream = await sendUpstreamRequest('POST', pathSuffix, payload);
+          const isSuccess = isUpstreamSuccess(upstream);
+
+          if (isSuccess) {
+            db.incrementApiUsage(apiKey);
+
+            if (isMasterAccount) {
+              db.removeUidGlobally(uid);
+            } else {
+              db.removeKeyUid(apiKey, uid);
+            }
             
             await message.reply(createEmbed({
-              title: '🗑️ UID Node Terminated',
+              title: '🗑️ UID Terminated & Removed Upstream',
               color: 0xFF3131,
               fields: [
                 { name: 'Target UID', value: `\`${uid}\``, inline: true },
-                { name: 'Action', value: 'Whitelist Removed', inline: true },
-                { name: 'Operator', value: `<@${authorId}>`, inline: true }
+                { name: 'Action', value: 'Whitelist Terminated', inline: true },
+                { name: 'Operator', value: `<@${authorId}>`, inline: true },
+                { name: 'GDCC API Status', value: '🔴 Purged', inline: true }
               ]
             }));
-            this.addLog(apiKey, `[SUCCESS] UID ${uid} removed via Discord command.`);
+            this.addLog(apiKey, `[SUCCESS] UID ${uid} removed from DB & GDCC API.`);
 
-            db.addActivityLog(0, reseller?.owner_id || config.masterAdminId, 'REMOVE_UID', uid, {
+            db.addActivityLog(0, currentReseller?.owner_id || config.masterAdminId, 'REMOVE_UID', uid, {
               platform: 'discord_bot',
               author_id: authorId
             });
           } else {
+            const errorMsg = upstream.data?.error || upstream.data?.message || 'Upstream GDCC API server error occurred.';
             await message.reply(createEmbed({
-              title: '❌ Removal Failed',
-              description: 'Failed to terminate whitelisted UID node.',
+              title: '❌ GDCC API Removal Failed',
+              description: `Upstream error: ${errorMsg}`,
               color: 0xFF3131
             }));
+            this.addLog(apiKey, `[ERROR] Command !remove failed upstream for UID ${uid}: ${errorMsg}`);
           }
 
         } else if (command === 'replace') {
-          const oldUid = args[1];
-          const newUid = args[2];
+          const oldUid = args[1]?.trim();
+          const newUid = args[2]?.trim();
           if (!oldUid || !newUid) {
             await message.reply(createEmbed({
               title: '❌ Command Syntax Error',
@@ -298,29 +372,70 @@ export class BotManager {
             return;
           }
 
-          const replaced = db.replaceKeyUid(apiKey, oldUid, newUid);
-          if (replaced) {
+          if (!/^\d+$/.test(newUid)) {
             await message.reply(createEmbed({
-              title: '🔄 UID Node Migrated',
+              title: '❌ Invalid New UID Format',
+              description: 'New UID must contain numeric digits only.',
+              color: 0xFF3131
+            }));
+            return;
+          }
+
+          const freshDb = db.loadDb();
+          const currentReseller = freshDb.api_keys[apiKey] || reseller;
+
+          let hasPermission = isMasterAccount;
+          if (!hasPermission && currentReseller?.uids?.[oldUid]) {
+            hasPermission = true;
+          }
+
+          if (!hasPermission) {
+            await message.reply(createEmbed({
+              title: '❌ Access Denied / Old UID Not Found',
+              description: `Old UID \`${oldUid}\` is not registered in your active whitelist.`,
+              color: 0xFF3131
+            }));
+            return;
+          }
+
+          // Forward to GDCC Upstream API
+          const isPhpApi = config.baseUrl.includes('api_user.php');
+          const pathSuffix = isPhpApi ? '?action=change_uid' : '/replace';
+          const payload = isPhpApi 
+            ? { old_uid: parseInt(oldUid, 10), new_uid: parseInt(newUid, 10) }
+            : { old_uid: oldUid, new_uid: newUid };
+
+          this.addLog(apiKey, `[API] Dispatching upstream migration request to GDCC API (${oldUid} -> ${newUid})...`);
+          const upstream = await sendUpstreamRequest('POST', pathSuffix, payload);
+          const isSuccess = isUpstreamSuccess(upstream);
+
+          if (isSuccess) {
+            db.incrementApiUsage(apiKey);
+            db.replaceKeyUid(apiKey, oldUid, newUid);
+
+            await message.reply(createEmbed({
+              title: '🔄 UID Node Migrated & Patched Upstream',
               color: 0x00FF88,
               fields: [
                 { name: 'Original UID', value: `\`${oldUid}\``, inline: true },
                 { name: 'New Target UID', value: `\`${newUid}\``, inline: true },
-                { name: 'Status', value: 'Migration Complete', inline: true }
+                { name: 'GDCC API Status', value: '🟢 Migrated', inline: true }
               ]
             }));
-            this.addLog(apiKey, `[SUCCESS] Node migrated from ${oldUid} to ${newUid} via Discord command.`);
+            this.addLog(apiKey, `[SUCCESS] Node migrated from ${oldUid} to ${newUid} in DB & GDCC API.`);
 
-            db.addActivityLog(0, reseller?.owner_id || config.masterAdminId, 'REPLACE_UID', newUid, {
+            db.addActivityLog(0, currentReseller?.owner_id || config.masterAdminId, 'REPLACE_UID', newUid, {
               old_uid: oldUid,
               platform: 'discord_bot'
             });
           } else {
+            const errorMsg = upstream.data?.error || upstream.data?.message || 'Upstream GDCC API server error occurred.';
             await message.reply(createEmbed({
-              title: '❌ Migration Failed',
-              description: `Old UID \`${oldUid}\` was not found in your whitelist directory.`,
+              title: '❌ GDCC API Migration Failed',
+              description: `Upstream error: ${errorMsg}`,
               color: 0xFF3131
             }));
+            this.addLog(apiKey, `[ERROR] Command !replace failed upstream for UID ${oldUid}: ${errorMsg}`);
           }
 
         } else if (command === 'info') {
