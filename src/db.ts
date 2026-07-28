@@ -184,8 +184,15 @@ export function addKeyUid(
   source: 'DISCORD_BOT' | 'FREE_PORTAL' | 'WEB_API' | 'ADMIN_PANEL' = 'WEB_API'
 ): boolean {
   const db = loadDb();
-  if (db.api_keys && db.api_keys[key]) {
-    const info = db.api_keys[key];
+  if (!db.api_keys) db.api_keys = {};
+  
+  let targetKey = key;
+  if (!db.api_keys[targetKey] && config.masterApiKey && db.api_keys[config.masterApiKey]) {
+    targetKey = config.masterApiKey;
+  }
+
+  if (db.api_keys[targetKey]) {
+    const info = db.api_keys[targetKey];
     if (!info.uids) {
       info.uids = {};
     }

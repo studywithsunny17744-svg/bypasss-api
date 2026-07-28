@@ -2036,7 +2036,8 @@ export default function App() {
                         </thead>
                         <tbody>
                           {(() => {
-                            const shownUidsList = dashboardFilter === 'my' 
+                            const isSearching = !!uidSearch.trim();
+                            const shownUidsList = (dashboardFilter === 'my' && !isSearching)
                               ? Object.entries(uidsList) 
                               : Object.entries(allUidsList);
                             
