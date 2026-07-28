@@ -139,6 +139,7 @@ export default function App() {
   const [botToken, setBotToken] = useState('');
   const [botGuildId, setBotGuildId] = useState('');
   const [botChannelId, setBotChannelId] = useState('');
+  const [botOwnerId, setBotOwnerId] = useState('');
   const [botActive, setBotActive] = useState(false);
   const [botSuspendedReason, setBotSuspendedReason] = useState('');
 
@@ -250,6 +251,7 @@ export default function App() {
           setBotToken(result.botConfig.token || '');
           setBotGuildId(result.botConfig.guild_id || '');
           setBotChannelId(result.botConfig.channel_id || '');
+          setBotOwnerId(result.botConfig.owner_id || '');
           setBotActive(result.botConfig.is_active || false);
           setBotSuspendedReason(result.botConfig.suspended_reason || '');
         } else {
@@ -831,7 +833,8 @@ export default function App() {
         body: JSON.stringify({
           botToken: botToken.trim(),
           guildId: botGuildId.trim(),
-          channelId: botChannelId.trim()
+          channelId: botChannelId.trim(),
+          ownerId: botOwnerId.trim()
         })
       });
       const data = await res.json();
@@ -2816,6 +2819,20 @@ axios.post('${typeof window !== 'undefined' ? window.location.origin : 'https://
                         <label style={{ display: 'block', fontSize: '11px', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '6px' }}>Audit Channel ID</label>
                         <input type="text" placeholder="15088337..." className="glow-input" value={botChannelId} onChange={e => setBotChannelId(e.target.value)} required readOnly={botActive} />
                       </div>
+                    </div>
+
+                    <div>
+                      <label style={{ display: 'block', fontSize: '11px', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '6px' }}>
+                        Authorized Bot Owner User ID <span style={{ color: 'var(--accent-purple)', fontSize: '10px' }}>(Only this user can run bot commands)</span>
+                      </label>
+                      <input 
+                        type="text" 
+                        placeholder="e.g. 109876543210987654 (Your Discord User ID)" 
+                        className="glow-input" 
+                        value={botOwnerId} 
+                        onChange={e => setBotOwnerId(e.target.value)} 
+                        readOnly={botActive} 
+                      />
                     </div>
                     
                     {botActive ? (

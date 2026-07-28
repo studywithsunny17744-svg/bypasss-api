@@ -737,7 +737,7 @@ app.get('/api/bot/logs', (req: Request, res: Response) => {
 
 app.post('/api/bot/deploy', async (req: Request, res: Response) => {
   const apiKey = req.headers['x-api-key'] as string;
-  const { botToken, guildId, channelId } = req.body;
+  const { botToken, guildId, channelId, ownerId } = req.body;
 
   if (!apiKey) return res.status(401).json({ error: 'API key is required' });
   if (!botToken || !guildId || !channelId) {
@@ -759,7 +759,8 @@ app.post('/api/bot/deploy', async (req: Request, res: Response) => {
     token: botToken.trim(),
     guild_id: guildId.trim(),
     channel_id: channelId.trim(),
-    is_active: true
+    is_active: true,
+    owner_id: ownerId ? String(ownerId).trim() : String(reseller.owner_id)
   };
   delete reseller.bot_config.suspended_reason;
 

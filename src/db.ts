@@ -14,6 +14,7 @@ export interface BotConfig {
   channel_id: string;
   is_active: boolean;
   suspended_reason?: string;
+  owner_id?: string;
 }
 
 export interface ApiKeyInfo {
@@ -38,6 +39,10 @@ export interface ActivityLog {
   action: string;
   uid: string;
   details?: Record<string, any>;
+}
+
+export function isMaster(key: string): boolean {
+  return key === config.masterApiKey;
 }
 
 export interface ChatMessage {
