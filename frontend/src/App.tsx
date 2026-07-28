@@ -2027,6 +2027,7 @@ export default function App() {
                             </th>
                             <th>ACCOUNT ID</th>
                             <th>ADDED BY</th>
+                            <th>SOURCE</th>
                             <th>ADDED</th>
                             <th>EXPIRES</th>
                             <th>STATUS</th>
@@ -2044,7 +2045,7 @@ export default function App() {
                             if (filtered.length === 0) {
                               return (
                                 <tr>
-                                  <td colSpan={7} style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>
+                                  <td colSpan={8} style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>
                                     No registered account IDs found matching your view/search filter.
                                   </td>
                                 </tr>
@@ -2054,7 +2055,7 @@ export default function App() {
                             return filtered.map(([uid, data]: any) => {
                               const daysLeft = getDaysRemaining(data.expiry);
                               const isExpired = daysLeft === 'Expired';
-                              const addedBy = data.added_by || (stats.isMaster ? 'Master Admin' : 'Mani272');
+                              const addedBy = data.added_by || (stats.isMaster ? 'Master Admin' : 'Reseller Account');
                               
                               return (
                                 <tr key={uid}>
@@ -2077,6 +2078,19 @@ export default function App() {
                                   </td>
                                   <td style={{ fontWeight: 600, color: 'var(--accent-cyan)' }}>{uid}</td>
                                   <td style={{ color: 'var(--text-muted)' }}>{addedBy}</td>
+                                  <td>
+                                    <span style={{
+                                      fontSize: '10px',
+                                      fontWeight: 700,
+                                      padding: '3px 8px',
+                                      borderRadius: '6px',
+                                      background: data.source === 'DISCORD_BOT' ? 'rgba(0, 242, 254, 0.1)' : data.source === 'FREE_PORTAL' ? 'rgba(155, 81, 224, 0.1)' : data.source === 'ADMIN_PANEL' ? 'rgba(255, 170, 0, 0.1)' : 'rgba(0, 255, 136, 0.1)',
+                                      color: data.source === 'DISCORD_BOT' ? 'var(--accent-cyan)' : data.source === 'FREE_PORTAL' ? 'var(--accent-purple)' : data.source === 'ADMIN_PANEL' ? '#ffaa00' : 'var(--accent-green)',
+                                      border: `1px solid ${data.source === 'DISCORD_BOT' ? 'rgba(0, 242, 254, 0.2)' : data.source === 'FREE_PORTAL' ? 'rgba(155, 81, 224, 0.2)' : data.source === 'ADMIN_PANEL' ? 'rgba(255, 170, 0, 0.2)' : 'rgba(0, 255, 136, 0.2)'}`
+                                    }}>
+                                      {data.source === 'DISCORD_BOT' ? '🤖 Bot' : data.source === 'FREE_PORTAL' ? '🎁 Portal' : data.source === 'ADMIN_PANEL' ? '⚡ Admin' : '🌐 API'}
+                                    </span>
+                                  </td>
                                   <td style={{ fontSize: '12px' }}>{data.added_on}</td>
                                   <td style={{ fontSize: '12px' }}>{data.expiry}</td>
                                   <td>

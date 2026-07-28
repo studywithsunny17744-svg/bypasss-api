@@ -112,58 +112,117 @@ export class BotManager {
           this.addLog(apiKey, `[SECURITY] Command !${command} blocked: user ${message.author.tag} (${authorId}) does not match Owner ID (${targetOwnerId}).`);
           await message.reply(`⛔ **Access Denied:** Only the designated bot owner (<@${targetOwnerId}>) is authorized to execute commands on this bot instance.`);
           return;
-        }
+        }        const createEmbed = (opts: {
+          title: string;
+          description?: string;
+          color?: number;
+          fields?: Array<{ name: string; value: string; inline?: boolean }>;
+          footer?: string;
+        }) => {
+          return {
+            embeds: [
+              {
+                title: opts.title,
+                description: opts.description,
+                color: opts.color || 0x00F2FE,
+                fields: opts.fields || [],
+                footer: {
+                  text: opts.footer || `${reseller?.username || 'Bypass Engine'} • Whitelist Edge Sync`
+                },
+                timestamp: new Date().toISOString()
+              }
+            ]
+          };
+        };
 
         // --- COMMAND HANDLERS ---
 
         if (command === 'help') {
           const customBrand = reseller?.username || reseller?.displayName || 'Reseller Bypass Suite';
-          let helpMsg = `🛡️ **${customBrand} Whitelist Bot Manual**\n\n` +
-            `• \`!add <uid> [days]\` - Whitelist a new UID node\n` +
-            `• \`!remove <uid>\` - Terminate/Remove UID node\n` +
-            `• \`!replace <old_uid> <new_uid>\` - Migrate UID to new node\n` +
-            `• \`!info <uid>\` - Check whitelisted UID details\n` +
-            `• \`!list\` - Display active whitelisted UIDs\n`;
+          const fields = [
+            {
+              name: '⚡ WHITELIST COMMANDS',
+              value: 
+                '`!add <uid> [days]` — Whitelist a game UID node\n' +
+                '`!remove <uid>` — Terminate whitelisted UID node\n' +
+                '`!replace <old> <new>` — Migrate UID to new node\n' +
+                '`!info <uid>` — Check whitelisted UID details & source\n' +
+                '`!list` — Display all active whitelisted UIDs',
+              inline: false
+            }
+          ];
 
           if (isMasterAccount) {
-            helpMsg += `\n👑 **MASTER ADMIN EXCLUSIVE COMMANDS:**\n` +
-              `• \`!genvoucher <coins> [days]\` - Mint a new gift voucher code\n` +
-              `• \`!createreseller <user> <pass> [limit] [credits]\` - Create reseller account\n` +
-              `• \`!resellers\` - View all active resellers registry\n` +
-              `• \`!purgetrials\` - Purge all 1-day free trial claims\n` +
-              `• \`!stats\` - View live system-wide statistics\n` +
-              `• \`!testwebhook\` - Trigger live Discord Webhook ping test\n`;
+            fields.push({
+              name: '👑 MASTER ADMIN COMMANDS',
+              value:
+                '`!genvoucher <coins> [days]` — Mint gift voucher code\n' +
+                '`!createreseller <user> <pass> [limit] [credits]` — Create reseller\n' +
+                '`!resellers` — View all resellers registry\n' +
+                '`!purgetrials` — Purge 1-day free trial claims\n' +
+                '`!stats` — View system overview statistics\n' +
+                '`!testwebhook` — Test live Discord Webhook ping',
+              inline: false
+            });
           }
 
-          await message.reply(helpMsg);
+          await message.reply(createEmbed({
+            title: `🛡️ ${customBrand} Whitelist Manual`,
+            description: 'Automated Whitelisting Control Suite',
+            color: 0x00F2FE,
+            fields
+          }));
 
         } else if (command === 'add') {
           const uid = args[1];
           const daysStr = args[2];
           if (!uid) {
-            await message.reply('❌ **Usage:** `!add <uid> [days]` (e.g. `!add 123456 30`)');
+            await message.reply(createEmbed({
+              title: '❌ Command Syntax Error',
+              description: 'Usage: `!add <uid> [days]` (e.g. `!add 51240182 30`)',
+              color: 0xFF3131
+            }));
             return;
           }
 
           const days = daysStr ? parseInt(daysStr, 10) : 30;
           if (isNaN(days) || days <= 0) {
-            await message.reply('❌ **Error:** Expiration days must be a valid positive number.');
+            await message.reply(createEmbed({
+              title: '❌ Invalid Duration',
+              description: 'Expiration days must be a valid positive number.',
+              color: 0xFF3131
+            }));
             return;
           }
 
-          // Check reseller capacity limits
           const activeCount = Object.keys(reseller?.uids || {}).length;
           const limit = reseller?.max_uids || 9999;
           
           if (!isMasterAccount && activeCount >= limit && !reseller?.uids?.[uid]) {
-            await message.reply(`❌ **Error:** Whitelisting limit reached. Your maximum capacity is **${limit}** UIDs.`);
+            await message.reply(createEmbed({
+              title: '❌ Quota Limit Exceeded',
+              description: `Your whitelist capacity limit of **${limit}** UIDs has been reached. Contact admin for upgrade.`,
+              color: 0xFF3131
+            }));
             this.addLog(apiKey, `[WARNING] Command !add failed: Whitelist capacity limit reached (${limit}).`);
             return;
           }
 
-          const added = db.addKeyUid(apiKey, uid, days);
+          const added = db.addKeyUid(apiKey, uid, days, 'DISCORD_BOT');
           if (added) {
-            await message.reply(`✅ **Successfully Whitelisted UID:** \`${uid}\` for **${days}** days.`);
+            const expDate = new Date();
+            expDate.setDate(expDate.getDate() + days);
+            
+            await message.reply(createEmbed({
+              title: '✅ UID Whitelisted Successfully',
+              color: 0x00FF88,
+              fields: [
+                { name: 'Target Game UID', value: `\`${uid}\``, inline: true },
+                { name: 'Duration Allocated', value: `**${days}** Days`, inline: true },
+                { name: 'Source', value: '🤖 Discord Bot', inline: true },
+                { name: 'Expires On', value: `\`${expDate.toISOString().split('T')[0]}\``, inline: true }
+              ]
+            }));
             this.addLog(apiKey, `[SUCCESS] UID ${uid} registered via Discord command for ${days} days.`);
             
             db.addActivityLog(0, reseller?.owner_id || config.masterAdminId, 'ADD_UID', uid, {
@@ -172,18 +231,30 @@ export class BotManager {
               author_id: authorId
             });
           } else {
-            await message.reply('❌ **Error:** Failed to record whitelisted UID into database.');
+            await message.reply(createEmbed({
+              title: '❌ Whitelisting Failed',
+              description: 'Failed to record UID into whitelisting engine database.',
+              color: 0xFF3131
+            }));
           }
 
         } else if (command === 'remove') {
           const uid = args[1];
           if (!uid) {
-            await message.reply('❌ **Usage:** `!remove <uid>`');
+            await message.reply(createEmbed({
+              title: '❌ Command Syntax Error',
+              description: 'Usage: `!remove <uid>` (e.g. `!remove 51240182`)',
+              color: 0xFF3131
+            }));
             return;
           }
 
           if (!reseller?.uids?.[uid]) {
-            await message.reply(`❌ **Error:** UID \`${uid}\` is not registered in your whitelist directory.`);
+            await message.reply(createEmbed({
+              title: '❌ UID Not Found',
+              description: `Target UID \`${uid}\` is not registered in your active whitelist.`,
+              color: 0xFF3131
+            }));
             return;
           }
 
@@ -192,7 +263,15 @@ export class BotManager {
             delete freshDb.api_keys[apiKey].uids[uid];
             db.saveDb(freshDb);
             
-            await message.reply(`✅ **Successfully Removed UID:** \`${uid}\` from whitelist.`);
+            await message.reply(createEmbed({
+              title: '🗑️ UID Node Terminated',
+              color: 0xFF3131,
+              fields: [
+                { name: 'Target UID', value: `\`${uid}\``, inline: true },
+                { name: 'Action', value: 'Whitelist Removed', inline: true },
+                { name: 'Operator', value: `<@${authorId}>`, inline: true }
+              ]
+            }));
             this.addLog(apiKey, `[SUCCESS] UID ${uid} removed via Discord command.`);
 
             db.addActivityLog(0, reseller?.owner_id || config.masterAdminId, 'REMOVE_UID', uid, {
@@ -200,20 +279,36 @@ export class BotManager {
               author_id: authorId
             });
           } else {
-            await message.reply('❌ **Error:** Failed to remove whitelisted UID.');
+            await message.reply(createEmbed({
+              title: '❌ Removal Failed',
+              description: 'Failed to terminate whitelisted UID node.',
+              color: 0xFF3131
+            }));
           }
 
         } else if (command === 'replace') {
           const oldUid = args[1];
           const newUid = args[2];
           if (!oldUid || !newUid) {
-            await message.reply('❌ **Usage:** `!replace <old_uid> <new_uid>`');
+            await message.reply(createEmbed({
+              title: '❌ Command Syntax Error',
+              description: 'Usage: `!replace <old_uid> <new_uid>`',
+              color: 0xFF3131
+            }));
             return;
           }
 
           const replaced = db.replaceKeyUid(apiKey, oldUid, newUid);
           if (replaced) {
-            await message.reply(`🔄 **Successfully Migrated UID:** \`${oldUid}\` ➔ \`${newUid}\`.`);
+            await message.reply(createEmbed({
+              title: '🔄 UID Node Migrated',
+              color: 0x00FF88,
+              fields: [
+                { name: 'Original UID', value: `\`${oldUid}\``, inline: true },
+                { name: 'New Target UID', value: `\`${newUid}\``, inline: true },
+                { name: 'Status', value: 'Migration Complete', inline: true }
+              ]
+            }));
             this.addLog(apiKey, `[SUCCESS] Node migrated from ${oldUid} to ${newUid} via Discord command.`);
 
             db.addActivityLog(0, reseller?.owner_id || config.masterAdminId, 'REPLACE_UID', newUid, {
@@ -221,19 +316,31 @@ export class BotManager {
               platform: 'discord_bot'
             });
           } else {
-            await message.reply(`❌ **Error:** Target UID \`${oldUid}\` was not found in your active whitelist.`);
+            await message.reply(createEmbed({
+              title: '❌ Migration Failed',
+              description: `Old UID \`${oldUid}\` was not found in your whitelist directory.`,
+              color: 0xFF3131
+            }));
           }
 
         } else if (command === 'info') {
           const uid = args[1];
           if (!uid) {
-            await message.reply('❌ **Usage:** `!info <uid>`');
+            await message.reply(createEmbed({
+              title: '❌ Command Syntax Error',
+              description: 'Usage: `!info <uid>`',
+              color: 0xFF3131
+            }));
             return;
           }
 
           const uidInfo = reseller?.uids?.[uid];
           if (!uidInfo) {
-            await message.reply(`❌ **Error:** UID \`${uid}\` is not whitelisted.`);
+            await message.reply(createEmbed({
+              title: '❌ UID Not Whitelisted',
+              description: `Target UID \`${uid}\` is not registered.`,
+              color: 0xFF3131
+            }));
             return;
           }
 
@@ -242,48 +349,73 @@ export class BotManager {
           const daysLeft = Math.ceil(diff / (1000 * 60 * 60 * 24));
           const validity = daysLeft <= 0 ? 'Expired' : (daysLeft >= 1000 ? 'Lifetime' : `${daysLeft} Days`);
 
-          await message.reply(
-            `ℹ️ **Whitelisted UID Info:**\n` +
-            `• **UID:** \`${uid}\`\n` +
-            `• **Registered On:** \`${uidInfo.added_on}\`\n` +
-            `• **Valid For:** \`${validity}\` (Expires: \`${uidInfo.expiry}\`)`
-          );
+          const sourceTag = uidInfo.source === 'DISCORD_BOT' ? '🤖 Discord Bot' :
+            uidInfo.source === 'FREE_PORTAL' ? '🎁 Free Portal' :
+            uidInfo.source === 'ADMIN_PANEL' ? '⚡ Admin Panel' : '🌐 Web API';
+
+          await message.reply(createEmbed({
+            title: `ℹ️ UID Node Details: ${uid}`,
+            color: 0x00F2FE,
+            fields: [
+              { name: 'Target UID', value: `\`${uid}\``, inline: true },
+              { name: 'Source', value: sourceTag, inline: true },
+              { name: 'Remaining Validity', value: `**${validity}**`, inline: true },
+              { name: 'Registered Date', value: `\`${uidInfo.added_on}\``, inline: true },
+              { name: 'Expiration Date', value: `\`${uidInfo.expiry}\``, inline: true }
+            ]
+          }));
 
         } else if (command === 'list') {
           const uids = reseller?.uids || {};
           const list = Object.entries(uids);
 
           if (list.length === 0) {
-            await message.reply('📋 Your whitelist registry directory is completely empty.');
+            await message.reply(createEmbed({
+              title: '📋 Whitelist Directory Empty',
+              description: 'No UIDs are currently registered in your account.',
+              color: 0x00F2FE
+            }));
             return;
           }
 
-          const replyLines = ['📋 **Whitelisted UIDs Directory:**'];
-          list.forEach(([uid, info]: any) => {
+          const lines = list.map(([uid, info]: any) => {
             const expDate = new Date(info.expiry.replace(' ', 'T'));
             const diff = expDate.getTime() - new Date().getTime();
             const daysLeft = Math.ceil(diff / (1000 * 60 * 60 * 24));
             const validity = daysLeft <= 0 ? 'Expired' : (daysLeft >= 1000 ? 'Lifetime' : `${daysLeft}d`);
-            replyLines.push(`• \`${uid}\` - Expiry: \`${validity}\` (\`${info.expiry.split(' ')[0]}\`)`);
+            const sBadge = info.source === 'DISCORD_BOT' ? '🤖 Bot' : info.source === 'FREE_PORTAL' ? '🎁 Portal' : info.source === 'ADMIN_PANEL' ? '⚡ Admin' : '🌐 API';
+            return `\`${uid}\` • ${validity} • ${sBadge}`;
           });
 
-          let replyStr = replyLines.join('\n');
-          if (replyStr.length > 1950) {
-            replyStr = replyStr.substring(0, 1900) + '\n... (truncated list due to length limits)';
+          let desc = lines.join('\n');
+          if (desc.length > 3900) {
+            desc = desc.substring(0, 3850) + '\n... (truncated list due to length limits)';
           }
 
-          await message.reply(replyStr);
+          await message.reply(createEmbed({
+            title: `📋 Whitelisted UIDs Registry (${list.length})`,
+            description: desc,
+            color: 0x00F2FE
+          }));
 
         } else if (command === 'genvoucher' || command === 'createvoucher') {
           if (!isMasterAccount) {
-            await message.reply('⛔ **Access Denied:** Only Master Administrators can mint gift vouchers.');
+            await message.reply(createEmbed({
+              title: '⛔ Access Denied',
+              description: 'Only Master Administrators can mint gift vouchers.',
+              color: 0xFF3131
+            }));
             return;
           }
 
           const coinsVal = parseFloat(args[1] || '0');
           const daysVal = parseInt(args[2] || '0', 10);
           if (coinsVal <= 0 && daysVal <= 0) {
-            await message.reply('❌ **Usage:** `!genvoucher <coins> [days]` (e.g. `!genvoucher 50 30`)');
+            await message.reply(createEmbed({
+              title: '❌ Command Syntax Error',
+              description: 'Usage: `!genvoucher <coins> [days]` (e.g. `!genvoucher 50 30`)',
+              color: 0xFF3131
+            }));
             return;
           }
 
@@ -296,16 +428,23 @@ export class BotManager {
             bonus_days: daysVal
           });
 
-          await message.reply(
-            `🎁 **Gift Voucher Code Minted!**\n` +
-            `• **Voucher Code:** \`${voucherCode}\`\n` +
-            `• **Coins Value:** **${coinsVal}** Coins\n` +
-            `• **Bonus Days:** **${daysVal}** Days`
-          );
+          await message.reply(createEmbed({
+            title: '🎁 Gift Voucher Minted',
+            color: 0x00FF88,
+            fields: [
+              { name: 'Voucher Code', value: `\`${voucherCode}\``, inline: false },
+              { name: 'Coins Value', value: `**${coinsVal}** Coins`, inline: true },
+              { name: 'Bonus Days', value: `**${daysVal}** Days`, inline: true }
+            ]
+          }));
 
         } else if (command === 'createreseller') {
           if (!isMasterAccount) {
-            await message.reply('⛔ **Access Denied:** Only Master Administrators can create new reseller accounts.');
+            await message.reply(createEmbed({
+              title: '⛔ Access Denied',
+              description: 'Only Master Administrators can create reseller accounts.',
+              color: 0xFF3131
+            }));
             return;
           }
 
@@ -315,7 +454,11 @@ export class BotManager {
           const initialCredits = parseFloat(args[4] || '0');
 
           if (!username || !password) {
-            await message.reply('❌ **Usage:** `!createreseller <username> <password> [max_uids] [initial_credits]`');
+            await message.reply(createEmbed({
+              title: '❌ Command Syntax Error',
+              description: 'Usage: `!createreseller <user> <pass> [max_uids] [initial_credits]`',
+              color: 0xFF3131
+            }));
             return;
           }
 
@@ -333,18 +476,25 @@ export class BotManager {
             credits: initialCredits
           });
 
-          await message.reply(
-            `👤 **New Reseller Account Created!**\n` +
-            `• **Username:** \`${username}\`\n` +
-            `• **Password:** \`${password}\`\n` +
-            `• **License Key:** \`${newKey}\`\n` +
-            `• **Max Allocation Limit:** **${maxUids}** UIDs\n` +
-            `• **Initial Credits:** **${initialCredits}** Coins`
-          );
+          await message.reply(createEmbed({
+            title: '👤 Reseller Account Created',
+            color: 0x00FF88,
+            fields: [
+              { name: 'Username', value: `\`${username}\``, inline: true },
+              { name: 'Password', value: `\`${password}\``, inline: true },
+              { name: 'License Key', value: `\`${newKey}\``, inline: false },
+              { name: 'UID Capacity Limit', value: `**${maxUids}** UIDs`, inline: true },
+              { name: 'Initial Credits', value: `**${initialCredits}** Coins`, inline: true }
+            ]
+          }));
 
         } else if (command === 'resellers' || command === 'listresellers') {
           if (!isMasterAccount) {
-            await message.reply('⛔ **Access Denied:** Only Master Administrators can view active resellers.');
+            await message.reply(createEmbed({
+              title: '⛔ Access Denied',
+              description: 'Only Master Administrators can view active resellers.',
+              color: 0xFF3131
+            }));
             return;
           }
 
@@ -352,22 +502,37 @@ export class BotManager {
           const list = Object.values(liveDb.api_keys || {});
           
           if (list.length === 0) {
-            await message.reply('📋 Active resellers registry is currently empty.');
+            await message.reply(createEmbed({
+              title: '📋 System Resellers Registry Empty',
+              description: 'No reseller accounts registered.',
+              color: 0x00F2FE
+            }));
             return;
           }
 
-          const replyLines = ['📋 **System Resellers Registry:**'];
-          list.forEach((info: any) => {
+          const fields = list.map((info: any) => {
             const coins = db.getCredits(info.owner_id);
             const activeUids = Object.keys(info.uids || {}).length;
-            replyLines.push(`• **${info.username || info.owner_id}** - UIDs: \`${activeUids}/${info.max_uids || 100}\` | Credits: \`${coins.toFixed(2)}\` Coins | Status: \`${info.is_active !== false ? 'Active' : 'Suspended'}\``);
+            return {
+              name: `👤 ${info.username || info.owner_id}`,
+              value: `UIDs: \`${activeUids}/${info.max_uids || 100}\` | Credits: \`${coins.toFixed(2)}\` | Status: \`${info.is_active !== false ? 'Active' : 'Suspended'}\``,
+              inline: false
+            };
           });
 
-          await message.reply(replyLines.join('\n'));
+          await message.reply(createEmbed({
+            title: `📋 System Resellers Registry (${list.length})`,
+            color: 0x00F2FE,
+            fields
+          }));
 
         } else if (command === 'purgetrials') {
           if (!isMasterAccount) {
-            await message.reply('⛔ **Access Denied:** Only Master Administrators can purge trial claims.');
+            await message.reply(createEmbed({
+              title: '⛔ Access Denied',
+              description: 'Only Master Administrators can purge trial claims.',
+              color: 0xFF3131
+            }));
             return;
           }
 
@@ -379,11 +544,19 @@ export class BotManager {
             count
           });
 
-          await message.reply(`🧹 **Free Trial Claims Purged:** Successfully wiped **${count}** trial nodes from registry.`);
+          await message.reply(createEmbed({
+            title: '🧹 Free Trial Claims Purged',
+            description: `Successfully wiped **${count}** trial nodes from system memory registry.`,
+            color: 0xFF3131
+          }));
 
         } else if (command === 'stats' || command === 'systemstats') {
           if (!isMasterAccount) {
-            await message.reply('⛔ **Access Denied:** Only Master Administrators can view system stats.');
+            await message.reply(createEmbed({
+              title: '⛔ Access Denied',
+              description: 'Only Master Administrators can view system stats.',
+              color: 0xFF3131
+            }));
             return;
           }
 
@@ -394,16 +567,23 @@ export class BotManager {
             if (info.uids) systemTotalUids += Object.keys(info.uids).length;
           }
 
-          await message.reply(
-            `📊 **System Overview Statistics:**\n` +
-            `• **Total Whitelisted UIDs:** \`${systemTotalUids}\`\n` +
-            `• **Active Resellers:** \`${systemActiveAdmins}\`\n` +
-            `• **Engine Sync:** \`STABLE • Edge Proxy Gateway\``
-          );
+          await message.reply(createEmbed({
+            title: '📊 System Overview Statistics',
+            color: 0x00F2FE,
+            fields: [
+              { name: 'Total Whitelisted UIDs', value: `\`${systemTotalUids}\``, inline: true },
+              { name: 'Active Resellers', value: `\`${systemActiveAdmins}\``, inline: true },
+              { name: 'Engine Sync', value: '`STABLE • Edge Proxy`', inline: true }
+            ]
+          }));
 
         } else if (command === 'testwebhook') {
           if (!isMasterAccount) {
-            await message.reply('⛔ **Access Denied:** Only Master Administrators can trigger webhook test pings.');
+            await message.reply(createEmbed({
+              title: '⛔ Access Denied',
+              description: 'Only Master Administrators can trigger webhook test pings.',
+              color: 0xFF3131
+            }));
             return;
           }
 
@@ -411,7 +591,11 @@ export class BotManager {
             platform: 'discord_bot_command'
           });
 
-          await message.reply('⚡ **Live Webhook Test Dispatched!** Check your Discord webhook log channel.');
+          await message.reply(createEmbed({
+            title: '⚡ Live Webhook Test Dispatched',
+            description: 'A test ping embed has been dispatched to your configured Discord Webhook URL.',
+            color: 0x9B51E0
+          }));
         }
       });
 

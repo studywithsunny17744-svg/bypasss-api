@@ -7,6 +7,7 @@ export interface UidInfo {
   added_on: string;
   days: number;
   expiry: string;
+  source?: 'DISCORD_BOT' | 'FREE_PORTAL' | 'WEB_API' | 'ADMIN_PANEL' | string;
 }
 
 export interface BotConfig {
@@ -176,7 +177,12 @@ export function incrementApiUsage(key: string): void {
   }
 }
 
-export function addKeyUid(key: string, uid: string, days: number): boolean {
+export function addKeyUid(
+  key: string, 
+  uid: string, 
+  days: number = 30, 
+  source: 'DISCORD_BOT' | 'FREE_PORTAL' | 'WEB_API' | 'ADMIN_PANEL' = 'WEB_API'
+): boolean {
   const db = loadDb();
   if (db.api_keys && db.api_keys[key]) {
     const info = db.api_keys[key];
@@ -196,7 +202,8 @@ export function addKeyUid(key: string, uid: string, days: number): boolean {
     info.uids[uid] = {
       added_on: formatDate(addedOn),
       days: days,
-      expiry: formatDate(expiry)
+      expiry: formatDate(expiry),
+      source: source
     };
     
     saveDb(db);
@@ -519,7 +526,7 @@ export function claimFreePortalUid(
   }
 
   // Whitelist the UID under the reseller's API key
-  const added = addKeyUid(portal.api_key, uid, portal.days);
+  const added = addKeyUid(portal.api_key, uid, portal.days, 'FREE_PORTAL');
   if (!added) {
     return { success: false, message: 'Failed to record UID to whitelisting engine.' };
   }

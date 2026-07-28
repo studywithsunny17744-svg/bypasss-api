@@ -292,7 +292,7 @@ app.post('/api/uids/add', async (req: Request, res: Response) => {
       db.removeCredits(keyInfo!.owner_id, cost);
     }
     db.incrementApiUsage(apiKey);
-    db.addKeyUid(apiKey, cleanUid, numDays);
+    db.addKeyUid(apiKey, cleanUid, numDays, 'WEB_API');
     
     db.addActivityLog(0, keyInfo?.owner_id || config.masterAdminId, 'add', cleanUid, {
       user_name: isMasterKey ? 'Master Administrator' : `Reseller_${keyInfo?.owner_id}`,
