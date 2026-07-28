@@ -10,26 +10,34 @@ export async function sendUpstreamRequest(
   let url = config.baseUrl;
   const masterKey = config.masterApiKey;
   
+  let finalPayload = payload;
+
   if (isPhpApi) {
     let suffix = pathSuffix;
     if (!suffix.includes('key=')) {
       suffix += `${suffix.includes('?') ? '&' : '?'}key=${encodeURIComponent(masterKey)}&api_key=${encodeURIComponent(masterKey)}`;
     }
+    
+    // Ensure all payload params are also attached as query parameters for PHP $_GET / $_REQUEST compatibility
+    if (payload && typeof payload === 'object') {
+      for (const [k, v] of Object.entries(payload)) {
+        if (v !== undefined && v !== null && !suffix.includes(`${k}=`)) {
+          suffix += `&${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`;
+        }
+      }
+
+      finalPayload = {
+        ...payload,
+        key: payload.key || masterKey,
+        api_key: payload.api_key || masterKey
+      };
+    }
+
     url = `${config.baseUrl}${suffix}`;
   } else {
     // REST API formatting
     const cleanedSuffix = pathSuffix.replace('?action=', '/api/v1/uids/');
     url = `${config.baseUrl}${cleanedSuffix}`;
-  }
-
-  // Ensure payload contains api_key and key for PHP API compatibility
-  let finalPayload = payload;
-  if (isPhpApi && payload && typeof payload === 'object') {
-    finalPayload = {
-      ...payload,
-      key: payload.key || masterKey,
-      api_key: payload.api_key || masterKey
-    };
   }
 
   const headers = {
@@ -60,17 +68,43 @@ export async function sendUpstreamRequest(
 
 export function isUpstreamSuccess(upstream: { status: number; data: any }): boolean {
   if (!upstream || !upstream.data) return false;
-  if (
-    upstream.data.success === false ||
-    upstream.data.status === 'error' ||
-    upstream.data.status === 'failed' ||
-    upstream.data.error
-  ) {
-    return false;
+
+  const data = upstream.data;
+
+  // If response is raw string (HTML/Text)
+  if (typeof data === 'string') {
+    const lower = data.toLowerCase();
+    if (lower.includes('success') || lower.includes('whitelisted') || lower.includes('added') || lower.includes('true')) {
+      return true;
+    }
+    if (lower.includes('error') || lower.includes('fail') || lower.includes('invalid')) {
+      return false;
+    }
   }
-  return (
-    upstream.data.success === true ||
-    upstream.data.status === 'success' ||
-    (upstream.status >= 200 && upstream.status < 300)
-  );
+
+  // If response is Object
+  if (typeof data === 'object') {
+    if (
+      data.success === true ||
+      data.status === 'success' ||
+      data.status === 'ok' ||
+      data.status === 200 ||
+      data.code === 200 ||
+      data.result === 'success' ||
+      data.result === true
+    ) {
+      return true;
+    }
+
+    if (
+      data.success === false ||
+      data.status === 'error' ||
+      data.status === 'failed' ||
+      (typeof data.error === 'string' && data.error.trim().length > 0 && data.error.toLowerCase() !== 'none' && data.error !== 'false' && data.error !== '0')
+    ) {
+      return false;
+    }
+  }
+
+  return upstream.status >= 200 && upstream.status < 300;
 }

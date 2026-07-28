@@ -242,7 +242,7 @@ app.post('/api/uids/add', async (req: Request, res: Response) => {
   const isPhpApi = config.baseUrl.includes('api_user.php');
   const pathSuffix = isPhpApi ? '?action=add' : '/add';
   const payload = isPhpApi 
-    ? { account_id: parseInt(cleanUid, 10), for_days: numDays }
+    ? { account_id: parseInt(cleanUid, 10), uid: cleanUid, for_days: numDays, days: numDays }
     : { uid: cleanUid, days: numDays, name: `WebNode_${cleanUid}` };
 
   const upstream = await sendUpstreamRequest('POST', pathSuffix, payload);
@@ -902,6 +902,58 @@ app.post('/api/bot/stop', (req: Request, res: Response) => {
   BotManager.stopBot(apiKey);
   res.json({ success: true, message: 'Discord Bot client connection terminated.' });
 });
+
+app.post('/api/bot/save-config', async (req: Request, res: Response) => {
+  const apiKey = req.headers['x-api-key'] as string;
+  const { botToken, guildId, channelId, ownerId, botName, botAvatar } = req.body;
+
+  if (!apiKey) return res.status(401).json({ error: 'API key is required' });
+  if (!botToken || !guildId || !channelId) {
+    return res.status(400).json({ error: 'Token, Server ID, and Channel ID are required' });
+  }
+
+  const database = db.loadDb();
+  const reseller = database.api_keys[apiKey];
+  if (!reseller) return res.status(401).json({ error: 'Invalid API authorization key' });
+
+  const currentlyActive = reseller.bot_config?.is_active || BotManager.isBotRunning(apiKey);
+
+  reseller.bot_config = {
+    token: botToken.trim(),
+    guild_id: guildId.trim(),
+    channel_id: channelId.trim(),
+    is_active: currentlyActive,
+    owner_id: ownerId ? String(ownerId).trim() : String(reseller.owner_id),
+    bot_name: botName ? String(botName).trim() : undefined,
+    bot_avatar: botAvatar ? String(botAvatar).trim() : undefined
+  };
+  delete reseller.bot_config.suspended_reason;
+
+  db.saveDb(database);
+
+  if (currentlyActive) {
+    BotManager.stopBot(apiKey);
+    BotManager.startBot(apiKey, botToken.trim(), guildId.trim(), channelId.trim()).catch(() => {});
+  }
+
+  res.json({ success: true, message: 'Discord Bot configuration saved successfully.' });
+});
+
+app.post('/api/bot/clear-config', (req: Request, res: Response) => {
+  const apiKey = req.headers['x-api-key'] as string;
+  if (!apiKey) return res.status(401).json({ error: 'API key is required' });
+
+  const database = db.loadDb();
+  const reseller = database.api_keys[apiKey];
+  if (!reseller) return res.status(401).json({ error: 'Invalid API authorization key' });
+
+  BotManager.stopBot(apiKey);
+  delete reseller.bot_config;
+  db.saveDb(database);
+
+  res.json({ success: true, message: 'Discord Bot configuration cleared successfully.' });
+});
+
 
 // Admin compatibility route
 app.post('/api/admin/deploy', async (req: Request, res: Response) => {

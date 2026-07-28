@@ -241,7 +241,7 @@ export class BotManager {
           const isPhpApi = config.baseUrl.includes('api_user.php');
           const pathSuffix = isPhpApi ? '?action=add' : '/add';
           const payload = isPhpApi 
-            ? { account_id: parseInt(uid, 10), for_days: days }
+            ? { account_id: parseInt(uid, 10), uid: uid, for_days: days, days: days }
             : { uid, days, name: `DiscordBotNode_${uid}` };
 
           this.addLog(apiKey, `[API] Dispatching upstream request to GDCC API for UID ${uid}...`);

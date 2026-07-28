@@ -144,6 +144,8 @@ export default function App() {
   const [botAvatar, setBotAvatar] = useState('');
   const [botActive, setBotActive] = useState(false);
   const [botSuspendedReason, setBotSuspendedReason] = useState('');
+  const [botFormTouched, setBotFormTouched] = useState(false);
+  const [isEditingBotConfig, setIsEditingBotConfig] = useState(false);
 
   // Doc panel code snippets tab state
   const [docSnippetLang, setDocSnippetLang] = useState<'curl' | 'python' | 'node'>('curl');
@@ -262,12 +264,14 @@ export default function App() {
           setBrandLogo(result.brandLogo);
         }
         if (result.botConfig) {
-          setBotToken(result.botConfig.token || '');
-          setBotGuildId(result.botConfig.guild_id || '');
-          setBotChannelId(result.botConfig.channel_id || '');
-          setBotOwnerId(result.botConfig.owner_id || '');
-          setBotName(result.botConfig.bot_name || '');
-          setBotAvatar(result.botConfig.bot_avatar || '');
+          if (!botFormTouched && !isEditingBotConfig) {
+            setBotToken(result.botConfig.token || '');
+            setBotGuildId(result.botConfig.guild_id || '');
+            setBotChannelId(result.botConfig.channel_id || '');
+            setBotOwnerId(result.botConfig.owner_id || '');
+            setBotName(result.botConfig.bot_name || '');
+            setBotAvatar(result.botConfig.bot_avatar || '');
+          }
           setBotActive(result.botConfig.is_active || false);
           setBotSuspendedReason(result.botConfig.suspended_reason || '');
         } else {
@@ -1014,6 +1018,8 @@ export default function App() {
       setTimeout(() => {
         setIsDeployingBot(false);
         setBotActive(true);
+        setBotFormTouched(false);
+        setIsEditingBotConfig(false);
         setSuccessAlert('Discord Bot deployment launched!');
         fetchDashboardData(apiKey);
       }, 1500);
@@ -1021,6 +1027,79 @@ export default function App() {
     } catch (err) {
       addLog('[ERROR] Connection failed: bot deployment process launcher timed out.');
       setIsDeployingBot(false);
+    }
+  };
+
+  const handleSaveBotConfig = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!botToken.trim() || !botGuildId.trim() || !botChannelId.trim()) {
+      setErrorAlert('Bot Token, Server ID, and Channel ID are required.');
+      return;
+    }
+    setLoading(true);
+    try {
+      const res = await fetch('/api/bot/save-config', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey
+        },
+        body: JSON.stringify({
+          botToken: botToken.trim(),
+          guildId: botGuildId.trim(),
+          channelId: botChannelId.trim(),
+          ownerId: botOwnerId.trim(),
+          botName: botName.trim(),
+          botAvatar: botAvatar.trim()
+        })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setBotFormTouched(false);
+        setIsEditingBotConfig(false);
+        setSuccessAlert(data.message || 'Bot configuration saved successfully!');
+        fetchDashboardData(apiKey);
+      } else {
+        setErrorAlert(data.error || 'Failed to save bot configuration.');
+      }
+    } catch (err) {
+      setErrorAlert('Network error saving bot configuration.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleClearBotConfig = async () => {
+    if (!confirm('Are you sure you want to clear and remove your saved bot configuration?')) return;
+    setLoading(true);
+    try {
+      const res = await fetch('/api/bot/clear-config', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey
+        }
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setBotToken('');
+        setBotGuildId('');
+        setBotChannelId('');
+        setBotOwnerId('');
+        setBotName('');
+        setBotAvatar('');
+        setBotActive(false);
+        setBotFormTouched(false);
+        setIsEditingBotConfig(false);
+        setSuccessAlert('Bot configuration cleared successfully.');
+        fetchDashboardData(apiKey);
+      } else {
+        setErrorAlert(data.error || 'Failed to clear bot configuration.');
+      }
+    } catch (err) {
+      setErrorAlert('Error clearing bot configuration.');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -1037,6 +1116,8 @@ export default function App() {
       const data = await res.json();
       if (res.ok && data.success) {
         setBotActive(false);
+        setBotFormTouched(false);
+        setIsEditingBotConfig(false);
         setSuccessAlert('Discord Bot successfully shut down.');
         fetchDashboardData(apiKey);
       } else {
@@ -3153,16 +3234,40 @@ axios.post('${typeof window !== 'undefined' ? window.location.origin : 'https://
                   <form onSubmit={handleDeployBot} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                     <div>
                       <label style={{ display: 'block', fontSize: '11px', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '6px' }}>Discord Bot Token</label>
-                      <input type="password" placeholder="MTUyMzEx..." className="glow-input" value={botToken} onChange={e => setBotToken(e.target.value)} required readOnly={botActive} />
+                      <input 
+                        type="password" 
+                        placeholder="MTUyMzEx..." 
+                        className="glow-input" 
+                        value={botToken} 
+                        onChange={e => { setBotToken(e.target.value); setBotFormTouched(true); }} 
+                        required 
+                        readOnly={botActive && !isEditingBotConfig} 
+                      />
                     </div>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
                       <div>
                         <label style={{ display: 'block', fontSize: '11px', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '6px' }}>Discord Guild ID</label>
-                        <input type="text" placeholder="14396178..." className="glow-input" value={botGuildId} onChange={e => setBotGuildId(e.target.value)} required readOnly={botActive} />
+                        <input 
+                          type="text" 
+                          placeholder="14396178..." 
+                          className="glow-input" 
+                          value={botGuildId} 
+                          onChange={e => { setBotGuildId(e.target.value); setBotFormTouched(true); }} 
+                          required 
+                          readOnly={botActive && !isEditingBotConfig} 
+                        />
                       </div>
                       <div>
                         <label style={{ display: 'block', fontSize: '11px', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '6px' }}>Audit Channel ID</label>
-                        <input type="text" placeholder="15088337..." className="glow-input" value={botChannelId} onChange={e => setBotChannelId(e.target.value)} required readOnly={botActive} />
+                        <input 
+                          type="text" 
+                          placeholder="15088337..." 
+                          className="glow-input" 
+                          value={botChannelId} 
+                          onChange={e => { setBotChannelId(e.target.value); setBotFormTouched(true); }} 
+                          required 
+                          readOnly={botActive && !isEditingBotConfig} 
+                        />
                       </div>
                     </div>
 
@@ -3175,8 +3280,8 @@ axios.post('${typeof window !== 'undefined' ? window.location.origin : 'https://
                         placeholder="e.g. 109876543210987654 (Your Discord User ID)" 
                         className="glow-input" 
                         value={botOwnerId} 
-                        onChange={e => setBotOwnerId(e.target.value)} 
-                        readOnly={botActive} 
+                        onChange={e => { setBotOwnerId(e.target.value); setBotFormTouched(true); }} 
+                        readOnly={botActive && !isEditingBotConfig} 
                       />
                     </div>
 
@@ -3188,8 +3293,8 @@ axios.post('${typeof window !== 'undefined' ? window.location.origin : 'https://
                           placeholder="e.g. Sunny Bypass Bot" 
                           className="glow-input" 
                           value={botName} 
-                          onChange={e => setBotName(e.target.value)} 
-                          readOnly={botActive} 
+                          onChange={e => { setBotName(e.target.value); setBotFormTouched(true); }} 
+                          readOnly={botActive && !isEditingBotConfig} 
                         />
                       </div>
                       <div>
@@ -3199,20 +3304,74 @@ axios.post('${typeof window !== 'undefined' ? window.location.origin : 'https://
                           placeholder="e.g. https://i.imgur.com/your_logo.png" 
                           className="glow-input" 
                           value={botAvatar} 
-                          onChange={e => setBotAvatar(e.target.value)} 
-                          readOnly={botActive} 
+                          onChange={e => { setBotAvatar(e.target.value); setBotFormTouched(true); }} 
+                          readOnly={botActive && !isEditingBotConfig} 
                         />
                       </div>
                     </div>
                     
                     {botActive ? (
-                      <button type="button" className="btn-neon btn-neon-red" style={{ fontSize: '13px', padding: '12px' }} onClick={handleStopBot}>
-                        SHUT DOWN BOT CLIENT
-                      </button>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                        {isEditingBotConfig ? (
+                          <div style={{ display: 'flex', gap: '10px' }}>
+                            <button 
+                              type="button" 
+                              className="btn-neon btn-neon-green" 
+                              style={{ flex: 1, fontSize: '13px', padding: '12px' }} 
+                              onClick={() => handleSaveBotConfig()}
+                              disabled={loading}
+                            >
+                              💾 SAVE & RESTART BOT
+                            </button>
+                            <button 
+                              type="button" 
+                              className="btn-neon" 
+                              style={{ padding: '12px 18px', fontSize: '13px', background: 'transparent', border: '1px solid var(--border-glass)', color: 'var(--text-muted)' }} 
+                              onClick={() => {
+                                setIsEditingBotConfig(false);
+                                setBotFormTouched(false);
+                                fetchDashboardData(apiKey);
+                              }}
+                            >
+                              CANCEL
+                            </button>
+                          </div>
+                        ) : (
+                          <div style={{ display: 'flex', gap: '10px' }}>
+                            <button 
+                              type="button" 
+                              className="btn-neon btn-neon-purple" 
+                              style={{ flex: 1, fontSize: '13px', padding: '12px' }} 
+                              onClick={() => {
+                                setIsEditingBotConfig(true);
+                                setBotFormTouched(true);
+                              }}
+                            >
+                              ✏️ EDIT / CHANGE BOT CONFIG
+                            </button>
+                            <button 
+                              type="button" 
+                              className="btn-neon btn-neon-red" 
+                              style={{ flex: 1, fontSize: '13px', padding: '12px' }} 
+                              onClick={handleStopBot}
+                            >
+                              🔴 SHUT DOWN BOT CLIENT
+                            </button>
+                          </div>
+                        )}
+                      </div>
                     ) : (
-                      <button type="submit" className="btn-neon btn-neon-purple" style={{ fontSize: '13px', padding: '12px' }} disabled={isDeployingBot}>
-                        {isDeployingBot ? 'LAUNCHING DEPLOYMENT...' : 'DEPLOY BOT INSTANCE'}
-                      </button>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px' }}>
+                        <button type="submit" className="btn-neon btn-neon-purple" style={{ flex: '2', minWidth: '180px', fontSize: '13px', padding: '12px' }} disabled={isDeployingBot}>
+                          {isDeployingBot ? 'LAUNCHING DEPLOYMENT...' : '🚀 DEPLOY BOT INSTANCE'}
+                        </button>
+                        <button type="button" className="btn-neon btn-neon-green" style={{ flex: '1', minWidth: '130px', fontSize: '13px', padding: '12px' }} onClick={() => handleSaveBotConfig()} disabled={loading}>
+                          💾 SAVE CONFIG
+                        </button>
+                        <button type="button" className="btn-neon btn-neon-red" style={{ flex: '1', minWidth: '130px', fontSize: '13px', padding: '12px' }} onClick={handleClearBotConfig} disabled={loading}>
+                          🗑️ CLEAR
+                        </button>
+                      </div>
                     )}
 
                     <div style={{ marginTop: '8px', display: 'flex', justifyContent: 'center' }}>
