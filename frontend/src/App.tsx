@@ -1257,88 +1257,164 @@ export default function App() {
         </div>
       )}
 
-      {/* --- PUBLIC TRIAL CLAIM CARD VIEW --- */}
+      {/* --- PUBLIC STANDALONE FREE TRIAL GATEWAY VIEW --- */}
       {publicPortalInfo ? (
         <div style={{
           minHeight: '100vh',
           width: '100vw',
-          background: '#07090e',
+          background: '#040508',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          padding: '20px'
+          padding: '20px',
+          position: 'relative',
+          overflow: 'hidden'
         }}>
-          <div className="glass-card" style={{ maxWidth: '480px', width: '100%', display: 'flex', flexDirection: 'column', gap: '20px', position: 'relative', overflow: 'hidden' }}>
+          {/* Ambient Background Glow Orbs */}
+          <div style={{
+            position: 'absolute',
+            width: '350px',
+            height: '350px',
+            borderRadius: '50%',
+            background: 'radial-gradient(circle, rgba(0, 242, 254, 0.15) 0%, rgba(0,0,0,0) 70%)',
+            top: '15%',
+            left: '20%',
+            pointerEvents: 'none',
+            filter: 'blur(40px)'
+          }} />
+          <div style={{
+            position: 'absolute',
+            width: '300px',
+            height: '300px',
+            borderRadius: '50%',
+            background: 'radial-gradient(circle, rgba(155, 81, 224, 0.15) 0%, rgba(0,0,0,0) 70%)',
+            bottom: '15%',
+            right: '20%',
+            pointerEvents: 'none',
+            filter: 'blur(40px)'
+          }} />
+
+          <div className="glass-card glass-card-glow" style={{
+            maxWidth: '500px',
+            width: '100%',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '22px',
+            position: 'relative',
+            zIndex: 10,
+            padding: '32px',
+            border: '1px solid rgba(0, 242, 254, 0.25)',
+            boxShadow: '0 0 50px rgba(0, 242, 254, 0.1)'
+          }}>
+            {/* Top Gateway Badge */}
             <div style={{ textAlign: 'center' }}>
-              <div style={{ display: 'inline-flex', padding: '6px 14px', borderRadius: '20px', background: 'rgba(0, 242, 254, 0.1)', border: '1px solid rgba(0, 242, 254, 0.2)', color: 'var(--accent-cyan)', fontSize: '11px', fontWeight: 'bold', marginBottom: '12px' }}>
-                ⚡ MANI272 FREE TRIAL GATEWAY
+              <div style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '8px',
+                padding: '6px 16px',
+                borderRadius: '20px',
+                background: 'rgba(0, 242, 254, 0.08)',
+                border: '1px solid rgba(0, 242, 254, 0.3)',
+                color: 'var(--accent-cyan)',
+                fontSize: '11px',
+                fontWeight: 700,
+                letterSpacing: '0.5px',
+                marginBottom: '14px'
+              }}>
+                <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--accent-cyan)' }} className="pulse"></span>
+                PUBLIC FREE TRIAL GATEWAY
               </div>
-              <h2 style={{ fontSize: '22px', color: '#fff', fontFamily: 'var(--font-display)', margin: '0 0 6px 0' }}>
+              <h1 style={{ fontSize: '24px', color: '#fff', fontFamily: 'var(--font-display)', fontWeight: 800, margin: '0 0 8px 0', lineHeight: '1.2' }}>
                 {publicPortalInfo.title}
-              </h2>
-              <p style={{ color: 'var(--text-muted)', fontSize: '12px', margin: 0 }}>
-                Hosted by <span style={{ color: 'var(--accent-purple)', fontWeight: 'bold' }}>{publicPortalInfo.hostName}</span>
+              </h1>
+              <p style={{ color: 'var(--text-muted)', fontSize: '13px', margin: 0 }}>
+                Hosted by Reseller: <span style={{ color: 'var(--accent-purple)', fontWeight: 700 }}>{publicPortalInfo.hostName}</span>
               </p>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', background: 'rgba(0,0,0,0.3)', padding: '12px', borderRadius: '8px', border: '1px solid var(--border-glass)' }}>
+            {/* Trial Specs Info Grid */}
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: '1fr 1fr',
+              gap: '12px',
+              background: 'rgba(0, 0, 0, 0.4)',
+              padding: '16px',
+              borderRadius: '12px',
+              border: '1px solid rgba(255, 255, 255, 0.05)'
+            }}>
               <div>
-                <span style={{ display: 'block', fontSize: '10px', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Trial Duration</span>
-                <span style={{ fontSize: '14px', fontWeight: 'bold', color: 'var(--accent-green)' }}>{publicPortalInfo.days} Day (24 Hours)</span>
+                <span style={{ display: 'block', fontSize: '10px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '4px' }}>TRIAL DURATION</span>
+                <span style={{ fontSize: '15px', fontWeight: 800, color: 'var(--accent-green)', fontFamily: 'var(--font-display)' }}>
+                  {publicPortalInfo.days} Day (24h)
+                </span>
               </div>
               <div>
-                <span style={{ display: 'block', fontSize: '10px', color: 'var(--text-muted)', textTransform: 'uppercase' }}>IP Lock Guard</span>
-                <span style={{ fontSize: '14px', fontWeight: 'bold', color: 'var(--accent-cyan)' }}>1 Claim / IP</span>
+                <span style={{ display: 'block', fontSize: '10px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '4px' }}>IP SECURITY LOCK</span>
+                <span style={{ fontSize: '15px', fontWeight: 800, color: 'var(--accent-cyan)', fontFamily: 'var(--font-display)' }}>
+                  1 Claim / IP
+                </span>
               </div>
             </div>
 
+            {/* Notification alert message */}
             {publicClaimStatus && (
               <div style={{
-                padding: '12px',
-                borderRadius: '8px',
-                fontSize: '12px',
-                fontWeight: '600',
-                background: publicClaimStatus.success ? 'rgba(0, 255, 136, 0.1)' : 'rgba(255, 49, 49, 0.1)',
+                padding: '14px',
+                borderRadius: '10px',
+                fontSize: '13px',
+                fontWeight: 600,
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px',
+                background: publicClaimStatus.success ? 'rgba(0, 255, 136, 0.08)' : 'rgba(255, 49, 49, 0.08)',
                 border: `1px solid ${publicClaimStatus.success ? 'var(--accent-green)' : 'var(--accent-red)'}`,
-                color: publicClaimStatus.success ? 'var(--accent-green)' : 'var(--accent-red)'
+                color: publicClaimStatus.success ? 'var(--accent-green)' : 'var(--accent-red)',
+                boxShadow: publicClaimStatus.success ? '0 0 20px rgba(0, 255, 136, 0.15)' : '0 0 20px rgba(255, 49, 49, 0.15)'
               }}>
-                {publicClaimStatus.success ? '✅ ' : '❌ '}{publicClaimStatus.message}
+                <span>{publicClaimStatus.success ? '✅' : '❌'}</span>
+                <span>{publicClaimStatus.message}</span>
               </div>
             )}
 
-            <form onSubmit={handlePublicClaimUid} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            {/* Claim UID Form */}
+            <form onSubmit={handlePublicClaimUid} style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
               <div>
-                <label style={{ display: 'block', fontSize: '11px', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '6px', fontWeight: 'bold' }}>
+                <label style={{ display: 'block', fontSize: '11px', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '8px', fontWeight: 700, letterSpacing: '0.5px' }}>
                   Target Game / Account UID
                 </label>
                 <input 
                   type="text" 
                   className="glow-input" 
-                  placeholder="e.g. 51240182" 
+                  placeholder="Enter your game UID (e.g. 51240182)" 
                   value={publicClaimUid} 
                   onChange={e => setPublicClaimUid(e.target.value)} 
                   required 
+                  style={{ fontSize: '14px', padding: '14px 16px', background: 'rgba(0,0,0,0.5)' }}
                 />
               </div>
 
               <button 
                 type="submit" 
                 className="btn-neon btn-neon-green" 
-                style={{ width: '100%', padding: '14px', fontSize: '14px', fontWeight: 'bold' }} 
+                style={{
+                  width: '100%',
+                  padding: '16px',
+                  fontSize: '15px',
+                  fontWeight: 800,
+                  letterSpacing: '0.5px',
+                  borderRadius: '10px'
+                }} 
                 disabled={publicClaimLoading}
               >
-                {publicClaimLoading ? 'WHITELISTING UID...' : '⚡ CLAIM 24H FREE WHITELIST'}
+                {publicClaimLoading ? '⚡ WHITELISTING TARGET UID...' : '⚡ CLAIM 24H FREE WHITELIST'}
               </button>
             </form>
 
-            <div style={{ textAlign: 'center', marginTop: '10px' }}>
-              <button 
-                className="btn-neon" 
-                style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', fontSize: '11px', textDecoration: 'underline' }}
-                onClick={() => setPublicPortalInfo(null)}
-              >
-                Go to Reseller Login Dashboard
-              </button>
+            <div style={{ textAlign: 'center', paddingTop: '8px', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+              <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                Protected by Whitelist Edge Proxy Guard • 1 Claim per IP Address
+              </span>
             </div>
           </div>
         </div>
