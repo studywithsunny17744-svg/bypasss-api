@@ -227,6 +227,87 @@ export function replaceKeyUid(key: string, oldUid: string, newUid: string): bool
 }
 
 // Activity Auditing Logs
+export function dispatchActionWebhook(
+  action: string,
+  userId: string | number,
+  uid: string,
+  details: Record<string, any> = {}
+): void {
+  const webhookUrl = process.env.LOG_WEBHOOK_URL || '';
+  if (!webhookUrl) return;
+
+  const actUpper = (action || '').toUpperCase();
+  let title = '📝 System Activity Logged';
+  let color = 3447003; // Blue #3498db
+
+  if (actUpper.includes('ADD') || actUpper.includes('CLAIM')) {
+    title = '🟢 UID Whitelisted / Added';
+    color = 65416; // Green #00FF88
+  } else if (actUpper.includes('REMOVE') || actUpper.includes('PURGE')) {
+    title = '🔴 UID Purged / Removed';
+    color = 16724785; // Red #FF3131
+  } else if (actUpper.includes('REPLACE') || actUpper.includes('MIGRATE')) {
+    title = '🔄 UID Migrated / Replaced';
+    color = 10179040; // Purple #9B51E0
+  } else if (actUpper.includes('VOUCHER_CREATE')) {
+    title = '🎁 Gift Voucher Minted';
+    color = 15570240; // Gold
+  } else if (actUpper.includes('VOUCHER_REDEEM')) {
+    title = '💳 Gift Voucher Redeemed';
+    color = 65416; // Green
+  } else if (actUpper.includes('RESELLER_CREATE')) {
+    title = '👤 New Reseller Account Created';
+    color = 65534; // Cyan
+  } else if (actUpper.includes('RESELLER_UPDATE') || actUpper.includes('RESELLER_TOGGLE')) {
+    title = '⚙️ Reseller Account Modified';
+    color = 3447003; // Blue
+  } else if (actUpper.includes('RESELLER_DELETE')) {
+    title = '🗑️ Reseller Account Wiped';
+    color = 16724785; // Red
+  } else if (actUpper.includes('LOGIN')) {
+    title = '🔐 User Session Authenticated';
+    color = 65534; // Cyan
+  } else if (actUpper.includes('BOT')) {
+    title = '🤖 Discord Bot Action';
+    color = 10179040; // Purple
+  }
+
+  const fields: Array<{ name: string; value: string; inline?: boolean }> = [
+    { name: 'Action Type', value: `\`${action}\``, inline: true },
+    { name: 'User / Reseller', value: `\`${userId}\``, inline: true }
+  ];
+
+  if (uid && uid !== 'SYSTEM' && uid !== 'N/A') {
+    fields.push({ name: 'Target UID', value: `\`${uid}\``, inline: true });
+  }
+
+  for (const [key, val] of Object.entries(details)) {
+    if (val !== undefined && val !== null && key !== 'key' && key !== 'api_key_used') {
+      fields.push({ name: key.replace(/_/g, ' ').toUpperCase(), value: String(val), inline: true });
+    }
+  }
+
+  fields.push({ name: 'Timestamp', value: new Date().toLocaleString(), inline: false });
+
+  const payload = {
+    content: `⚡ **MANI272 Bypass Gateway Audit Log**`,
+    embeds: [
+      {
+        title,
+        color,
+        fields,
+        footer: { text: 'MANI272 Command Suite • Real-time Webhook Diagnostics' }
+      }
+    ]
+  };
+
+  fetch(webhookUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  }).catch(() => {});
+}
+
 export function addActivityLog(
   guildId: string | number,
   userId: string | number,
@@ -259,6 +340,9 @@ export function addActivityLog(
   }
   
   saveDb(db);
+
+  // Dispatch live Webhook audit log
+  dispatchActionWebhook(action, userId, uid, details);
 }
 
 // Credits Coin Purse

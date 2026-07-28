@@ -119,6 +119,8 @@ app.post('/api/login', (req: Request, res: Response) => {
     return res.status(403).json({ error: 'Account is currently suspended or inactive' });
   }
 
+  db.addActivityLog(0, keyInfo.username || keyInfo.owner_id, 'LOGIN', 'N/A', { is_master: false });
+
   res.json({
     success: true,
     isMaster: false,
@@ -428,6 +430,8 @@ app.post('/api/vouchers/create', (req: Request, res: Response) => {
   const code = `GIFT-${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
   db.createGiftVoucher(config.masterAdminId, code, numCoins, numDays);
 
+  db.addActivityLog(0, config.masterAdminId, 'VOUCHER_CREATE', code, { coins: numCoins, bonus_days: numDays });
+
   res.json({
     success: true,
     code,
@@ -453,6 +457,8 @@ app.post('/api/vouchers/redeem', (req: Request, res: Response) => {
   const result = db.claimGiftVoucher(userId, code);
 
   if (result.success) {
+    db.addActivityLog(0, userId, 'VOUCHER_REDEEM', code, { coins_added: result.amount, bonus_days: result.days });
+
     res.json({
       success: true,
       amount: result.amount,
@@ -537,6 +543,8 @@ app.post('/api/admin/keys', (req: Request, res: Response) => {
     db.addCredits(cleanUserId, coins);
   }
 
+  db.addActivityLog(0, cleanUserId, 'RESELLER_CREATE', username, { max_uids: maxUids || 100, credits: coins, expiry: expiry || 'Lifetime' });
+
   res.json({
     success: true,
     key: newKey,
@@ -576,6 +584,8 @@ app.put('/api/admin/keys/:key', (req: Request, res: Response) => {
   }
 
   db.saveDb(database);
+  db.addActivityLog(0, info.owner_id, 'RESELLER_UPDATE', info.username || key, { max_uids: maxUids, credits, expiry });
+
   res.json({ success: true, message: 'Reseller updated successfully' });
 });
 
@@ -595,13 +605,22 @@ app.put('/api/admin/keys/:key/limit', (req: Request, res: Response) => {
 app.post('/api/admin/keys/:key/toggle', (req: Request, res: Response) => {
   const { key } = req.params;
   const newStatus = db.toggleKeyStatus(key);
+  const info = db.getApiKeyInfo(key);
+
+  db.addActivityLog(0, info?.owner_id || key, 'RESELLER_TOGGLE', info?.username || key, { is_active: newStatus });
+
   res.json({ success: true, is_active: newStatus });
 });
 
 // Delete Reseller Key
 app.delete('/api/admin/keys/:key', (req: Request, res: Response) => {
   const { key } = req.params;
+  const info = db.getApiKeyInfo(key);
+  const username = info?.username || key;
+  const ownerId = info?.owner_id || key;
+
   if (db.deleteApiKey(key)) {
+    db.addActivityLog(0, ownerId, 'RESELLER_DELETE', username, {});
     res.json({ success: true, message: 'API key deleted permanently' });
   } else {
     res.status(404).json({ error: 'API key not found' });
@@ -621,6 +640,8 @@ app.post('/api/admin/reset-claims', async (req: Request, res: Response) => {
       const payload = isPhpApi ? { account_id: parseInt(uid, 10) } : { uid };
       sendUpstreamRequest('POST', suffix, payload).catch(err => console.error('Claims cleanup err:', err));
     }
+
+    db.addActivityLog(0, config.masterAdminId, 'RESET_CLAIMS', 'ALL_TRIAL_UIDS', { count });
 
     res.json({ success: true, message: `Free Whitelisted Claims Purged: scheduled cleanup of ${count} nodes upstream` });
   } catch (err: any) {
@@ -822,6 +843,7 @@ app.post('/api/profile/update', (req: Request, res: Response) => {
     database.user_names_cache['admin_display'] = displayName || 'Mani272';
     database.user_names_cache['admin_avatar'] = avatar || '';
     db.saveDb(database);
+    db.addActivityLog(0, config.masterAdminId, 'PROFILE_UPDATE', displayName || 'Admin', { avatar: !!avatar });
     return res.json({ success: true, displayName: displayName || 'Mani272', avatar: avatar || '' });
   }
 
@@ -834,6 +856,8 @@ app.post('/api/profile/update', (req: Request, res: Response) => {
   if (avatar !== undefined) keys[apiKey].avatar = avatar;
 
   db.saveDb(database);
+  db.addActivityLog(0, keys[apiKey].owner_id, 'PROFILE_UPDATE', keys[apiKey].displayName || 'Reseller', { avatar: !!avatar });
+
   res.json({
     success: true,
     displayName: keys[apiKey].displayName,
