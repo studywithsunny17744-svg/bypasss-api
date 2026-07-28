@@ -71,7 +71,7 @@ export default function App() {
   const [loginError, setLoginError] = useState('');
 
   // UI Navigation tabs states
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'apikey' | 'apidocs' | 'profile' | 'chat' | 'analytics' | 'logs' | 'resellers' | 'purge' | 'bot' | 'system'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'apikey' | 'apidocs' | 'profile' | 'chat' | 'analytics' | 'logs' | 'resellers' | 'purge' | 'bot' | 'system' | 'freeportals'>('dashboard');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [apiAccessEnabled, setApiAccessEnabled] = useState(true);
@@ -140,6 +140,8 @@ export default function App() {
   const [botGuildId, setBotGuildId] = useState('');
   const [botChannelId, setBotChannelId] = useState('');
   const [botOwnerId, setBotOwnerId] = useState('');
+  const [botName, setBotName] = useState('');
+  const [botAvatar, setBotAvatar] = useState('');
   const [botActive, setBotActive] = useState(false);
   const [botSuspendedReason, setBotSuspendedReason] = useState('');
 
@@ -156,6 +158,18 @@ export default function App() {
   const [userExpiry, setUserExpiry] = useState('Lifetime');
   const [genResellerExpiry, setGenResellerExpiry] = useState('');
   const [sessionSeconds, setSessionSeconds] = useState(1154);
+
+  // Free Portals trial system states
+  const [freePortals, setFreePortals] = useState<any[]>([]);
+  const [portalTitle, setPortalTitle] = useState('');
+  const [portalDays, setPortalDays] = useState('1');
+  const [portalMaxClaims, setPortalMaxClaims] = useState('0');
+
+  // Public Claim Page state
+  const [publicPortalInfo, setPublicPortalInfo] = useState<any>(null);
+  const [publicClaimUid, setPublicClaimUid] = useState('');
+  const [publicClaimLoading, setPublicClaimLoading] = useState(false);
+  const [publicClaimStatus, setPublicClaimStatus] = useState<{ success?: boolean; message?: string } | null>(null);
 
   // Live session countdown timer
   useEffect(() => {
@@ -252,6 +266,8 @@ export default function App() {
           setBotGuildId(result.botConfig.guild_id || '');
           setBotChannelId(result.botConfig.channel_id || '');
           setBotOwnerId(result.botConfig.owner_id || '');
+          setBotName(result.botConfig.bot_name || '');
+          setBotAvatar(result.botConfig.bot_avatar || '');
           setBotActive(result.botConfig.is_active || false);
           setBotSuspendedReason(result.botConfig.suspended_reason || '');
         } else {
@@ -317,10 +333,154 @@ export default function App() {
     }
   };
 
+  const fetchFreePortals = async (key: string) => {
+    try {
+      const res = await fetch('/api/free-portal/list', {
+        headers: { 'x-api-key': key }
+      });
+      const data = await res.json();
+      if (data.success) {
+        setFreePortals(data.portals || []);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const fetchPublicPortalInfo = async (pId: string) => {
+    try {
+      const res = await fetch(`/api/free-portal/info/${pId}`);
+      const data = await res.json();
+      if (data.success) {
+        setPublicPortalInfo(data);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleCreateFreePortal = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      const res = await fetch('/api/free-portal/create', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey
+        },
+        body: JSON.stringify({
+          title: portalTitle.trim(),
+          days: parseInt(portalDays, 10),
+          maxClaims: parseInt(portalMaxClaims, 10)
+        })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setPortalTitle('');
+        setPortalDays('1');
+        setPortalMaxClaims('0');
+        setSuccessAlert('Free Trial Portal link generated successfully!');
+        fetchFreePortals(apiKey);
+      } else {
+        setErrorAlert(data.error || 'Failed to generate free trial portal link.');
+      }
+    } catch (err) {
+      setErrorAlert('Error creating free trial portal link.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResetFreePortalClaims = async (portalId: string) => {
+    if (!confirm('Reset IP locks & purge all UIDs claimed from this portal?')) return;
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/free-portal/reset/${portalId}`, {
+        method: 'POST',
+        headers: { 'x-api-key': apiKey }
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setSuccessAlert(data.message);
+        fetchFreePortals(apiKey);
+        fetchDashboardData(apiKey);
+      } else {
+        setErrorAlert(data.error || 'Reset failed.');
+      }
+    } catch (err) {
+      setErrorAlert('Network error resetting portal claims.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteFreePortal = async (portalId: string) => {
+    if (!confirm('Are you sure you want to delete this trial portal link?')) return;
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/free-portal/${portalId}`, {
+        method: 'DELETE',
+        headers: { 'x-api-key': apiKey }
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setSuccessAlert('Free Trial Portal deleted.');
+        fetchFreePortals(apiKey);
+      } else {
+        setErrorAlert(data.error || 'Delete failed.');
+      }
+    } catch (err) {
+      setErrorAlert('Error deleting portal.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handlePublicClaimUid = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!publicClaimUid.trim() || !publicPortalInfo) return;
+
+    setPublicClaimLoading(true);
+    setPublicClaimStatus(null);
+
+    try {
+      const res = await fetch('/api/free-portal/claim', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          portalId: publicPortalInfo.id,
+          uid: publicClaimUid.trim()
+        })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setPublicClaimStatus({ success: true, message: data.message });
+        setPublicClaimUid('');
+        fetchPublicPortalInfo(publicPortalInfo.id);
+      } else {
+        setPublicClaimStatus({ success: false, message: data.error || 'Claim rejected.' });
+      }
+    } catch (err) {
+      setPublicClaimStatus({ success: false, message: 'Technical network error claiming UID.' });
+    } finally {
+      setPublicClaimLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const pId = urlParams.get('portal') || (window.location.pathname.startsWith('/free-claim/') ? window.location.pathname.split('/free-claim/')[1] : null);
+    if (pId) {
+      fetchPublicPortalInfo(pId);
+    }
+  }, []);
+
   useEffect(() => {
     if (apiKey) {
       fetchDashboardData(apiKey);
       fetchLeaderboard();
+      fetchFreePortals(apiKey);
       const seen = sessionStorage.getItem('welcome_seen');
       if (!seen) {
         setShowWelcome(true);
@@ -834,7 +994,9 @@ export default function App() {
           botToken: botToken.trim(),
           guildId: botGuildId.trim(),
           channelId: botChannelId.trim(),
-          ownerId: botOwnerId.trim()
+          ownerId: botOwnerId.trim(),
+          botName: botName.trim(),
+          botAvatar: botAvatar.trim()
         })
       });
       const data = await res.json();
@@ -1095,7 +1257,94 @@ export default function App() {
         </div>
       )}
 
-      {/* --- SIDEBAR PANEL (Exactly matching custom screenshot) --- */}
+      {/* --- PUBLIC TRIAL CLAIM CARD VIEW --- */}
+      {publicPortalInfo ? (
+        <div style={{
+          minHeight: '100vh',
+          width: '100vw',
+          background: '#07090e',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '20px'
+        }}>
+          <div className="glass-card" style={{ maxWidth: '480px', width: '100%', display: 'flex', flexDirection: 'column', gap: '20px', position: 'relative', overflow: 'hidden' }}>
+            <div style={{ textAlign: 'center' }}>
+              <div style={{ display: 'inline-flex', padding: '6px 14px', borderRadius: '20px', background: 'rgba(0, 242, 254, 0.1)', border: '1px solid rgba(0, 242, 254, 0.2)', color: 'var(--accent-cyan)', fontSize: '11px', fontWeight: 'bold', marginBottom: '12px' }}>
+                ⚡ MANI272 FREE TRIAL GATEWAY
+              </div>
+              <h2 style={{ fontSize: '22px', color: '#fff', fontFamily: 'var(--font-display)', margin: '0 0 6px 0' }}>
+                {publicPortalInfo.title}
+              </h2>
+              <p style={{ color: 'var(--text-muted)', fontSize: '12px', margin: 0 }}>
+                Hosted by <span style={{ color: 'var(--accent-purple)', fontWeight: 'bold' }}>{publicPortalInfo.hostName}</span>
+              </p>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', background: 'rgba(0,0,0,0.3)', padding: '12px', borderRadius: '8px', border: '1px solid var(--border-glass)' }}>
+              <div>
+                <span style={{ display: 'block', fontSize: '10px', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Trial Duration</span>
+                <span style={{ fontSize: '14px', fontWeight: 'bold', color: 'var(--accent-green)' }}>{publicPortalInfo.days} Day (24 Hours)</span>
+              </div>
+              <div>
+                <span style={{ display: 'block', fontSize: '10px', color: 'var(--text-muted)', textTransform: 'uppercase' }}>IP Lock Guard</span>
+                <span style={{ fontSize: '14px', fontWeight: 'bold', color: 'var(--accent-cyan)' }}>1 Claim / IP</span>
+              </div>
+            </div>
+
+            {publicClaimStatus && (
+              <div style={{
+                padding: '12px',
+                borderRadius: '8px',
+                fontSize: '12px',
+                fontWeight: '600',
+                background: publicClaimStatus.success ? 'rgba(0, 255, 136, 0.1)' : 'rgba(255, 49, 49, 0.1)',
+                border: `1px solid ${publicClaimStatus.success ? 'var(--accent-green)' : 'var(--accent-red)'}`,
+                color: publicClaimStatus.success ? 'var(--accent-green)' : 'var(--accent-red)'
+              }}>
+                {publicClaimStatus.success ? '✅ ' : '❌ '}{publicClaimStatus.message}
+              </div>
+            )}
+
+            <form onSubmit={handlePublicClaimUid} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '11px', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '6px', fontWeight: 'bold' }}>
+                  Target Game / Account UID
+                </label>
+                <input 
+                  type="text" 
+                  className="glow-input" 
+                  placeholder="e.g. 51240182" 
+                  value={publicClaimUid} 
+                  onChange={e => setPublicClaimUid(e.target.value)} 
+                  required 
+                />
+              </div>
+
+              <button 
+                type="submit" 
+                className="btn-neon btn-neon-green" 
+                style={{ width: '100%', padding: '14px', fontSize: '14px', fontWeight: 'bold' }} 
+                disabled={publicClaimLoading}
+              >
+                {publicClaimLoading ? 'WHITELISTING UID...' : '⚡ CLAIM 24H FREE WHITELIST'}
+              </button>
+            </form>
+
+            <div style={{ textAlign: 'center', marginTop: '10px' }}>
+              <button 
+                className="btn-neon" 
+                style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', fontSize: '11px', textDecoration: 'underline' }}
+                onClick={() => setPublicPortalInfo(null)}
+              >
+                Go to Reseller Login Dashboard
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <>
+          {/* --- SIDEBAR PANEL (Exactly matching custom screenshot) --- */}
       {apiKey && (
         <aside className={`sidebar-wrapper ${sidebarOpen ? 'open' : ''} ${sidebarCollapsed ? 'collapsed' : ''}`} style={{ width: sidebarCollapsed ? '80px' : '280px' }}>
           
@@ -1151,6 +1400,11 @@ export default function App() {
             <button className={`sidebar-btn ${activeTab === 'bot' ? 'active' : ''}`} onClick={() => { setActiveTab('bot'); setSidebarOpen(false); }}>
               <SwapIcon />
               {!sidebarCollapsed && <span>Bot Deploy</span>}
+            </button>
+
+            <button className={`sidebar-btn ${activeTab === 'freeportals' ? 'active' : ''}`} onClick={() => { setActiveTab('freeportals'); setSidebarOpen(false); }}>
+              <KeyIcon />
+              {!sidebarCollapsed && <span>Free Portals</span>}
             </button>
 
             {/* Section: SOCIAL */}
@@ -2834,6 +3088,31 @@ axios.post('${typeof window !== 'undefined' ? window.location.origin : 'https://
                         readOnly={botActive} 
                       />
                     </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                      <div>
+                        <label style={{ display: 'block', fontSize: '11px', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '6px' }}>Custom Bot Name / Branding</label>
+                        <input 
+                          type="text" 
+                          placeholder="e.g. Sunny Bypass Bot" 
+                          className="glow-input" 
+                          value={botName} 
+                          onChange={e => setBotName(e.target.value)} 
+                          readOnly={botActive} 
+                        />
+                      </div>
+                      <div>
+                        <label style={{ display: 'block', fontSize: '11px', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '6px' }}>Custom Bot Avatar Image URL</label>
+                        <input 
+                          type="text" 
+                          placeholder="e.g. https://i.imgur.com/your_logo.png" 
+                          className="glow-input" 
+                          value={botAvatar} 
+                          onChange={e => setBotAvatar(e.target.value)} 
+                          readOnly={botActive} 
+                        />
+                      </div>
+                    </div>
                     
                     {botActive ? (
                       <button type="button" className="btn-neon btn-neon-red" style={{ fontSize: '13px', padding: '12px' }} onClick={handleStopBot}>
@@ -2888,6 +3167,103 @@ axios.post('${typeof window !== 'undefined' ? window.location.origin : 'https://
                 </div>
               )}
 
+              {/* TAB CONTENT: Free Portals Trial System */}
+              {activeTab === 'freeportals' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+                  <div>
+                    <h2 style={{ fontSize: '22px', fontFamily: 'var(--font-display)', fontWeight: 700, marginBottom: '6px' }}>Free Trial Portals & Link Generator</h2>
+                    <p style={{ color: 'var(--text-muted)', fontSize: '13px' }}>Create public shareable links for 1-day complimentary free whitelist claims. Each user IP is locked to 1 claim.</p>
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '24px' }}>
+                    {/* Left Form Card */}
+                    <div className="glass-card">
+                      <h3 style={{ fontSize: '16px', marginBottom: '16px' }}>Generate Free Trial Portal Link</h3>
+                      <form onSubmit={handleCreateFreePortal} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                        <div>
+                          <label style={{ display: 'block', fontSize: '11px', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '6px' }}>Portal Title / Name</label>
+                          <input type="text" placeholder="e.g. Sunny's 24h Free Trial Bypass" className="glow-input" value={portalTitle} onChange={e => setPortalTitle(e.target.value)} required />
+                        </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                          <div>
+                            <label style={{ display: 'block', fontSize: '11px', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '6px' }}>Trial Duration (Days)</label>
+                            <input type="number" min="1" max="30" className="glow-input" value={portalDays} onChange={e => setPortalDays(e.target.value)} required />
+                          </div>
+                          <div>
+                            <label style={{ display: 'block', fontSize: '11px', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '6px' }}>Max Capacity (0 = ∞)</label>
+                            <input type="number" min="0" className="glow-input" value={portalMaxClaims} onChange={e => setPortalMaxClaims(e.target.value)} />
+                          </div>
+                        </div>
+                        <button type="submit" className="btn-neon btn-neon-green" style={{ fontSize: '13px', padding: '12px', marginTop: '8px' }}>
+                          ⚡ GENERATE SHAREABLE TRIAL LINK
+                        </button>
+                      </form>
+                    </div>
+
+                    {/* Right Info Box */}
+                    <div className="glass-card" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                      <h3 style={{ fontSize: '15px', color: 'var(--accent-cyan)' }}>🔒 IP Protection & Auto-Purge Rules</h3>
+                      <ul style={{ fontSize: '12px', color: 'var(--text-muted)', paddingLeft: '16px', lineHeight: '1.6', margin: 0 }}>
+                        <li>Har visitor/user ki IP address **1 claim** ke liye lock ho jati hai. Duplicate claims block honge.</li>
+                        <li>UID automatically aapke account quota se 24-hours (1 day) ke liye whitelist hoti hai.</li>
+                        <li>Aap kabhi bhi <b>"Reset IP Locks & Purge UIDs"</b> button daba kar saare free trial UIDs aur IP locks wipe kar sakte hain.</li>
+                        <li>Master Admin sabhi resellers ke trial portals reset and purge kar sakta hai.</li>
+                      </ul>
+                    </div>
+                  </div>
+
+                  {/* Active Portals Registry */}
+                  <div className="glass-card">
+                    <h3 style={{ fontSize: '16px', marginBottom: '16px' }}>Active Free Portals Directory</h3>
+                    {freePortals.length === 0 ? (
+                      <p style={{ color: 'var(--text-muted)', fontSize: '13px' }}>No free trial portals created yet. Use the form above to generate your first link.</p>
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                        {freePortals.map(portal => {
+                          const fullUrl = `${window.location.origin}/?portal=${portal.id}`;
+                          const totalClaims = Object.keys(portal.claimed_ips || {}).length;
+                          return (
+                            <div key={portal.id} style={{ background: 'rgba(0,0,0,0.3)', padding: '16px', borderRadius: '10px', border: '1px solid var(--border-glass)', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                  <span style={{ fontSize: '16px', fontWeight: 'bold', color: '#fff' }}>{portal.title}</span>
+                                  <span style={{ background: 'rgba(0, 255, 136, 0.1)', color: 'var(--accent-green)', padding: '2px 8px', borderRadius: '4px', fontSize: '10px', fontWeight: 'bold', border: '1px solid rgba(0, 255, 136, 0.2)' }}>
+                                    {portal.days} Day Trial
+                                  </span>
+                                </div>
+                                <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                                  Claims: <b style={{ color: 'var(--accent-cyan)' }}>{totalClaims}</b> / {portal.max_claims > 0 ? portal.max_claims : '∞'}
+                                </span>
+                              </div>
+
+                              <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                                <input type="text" readOnly className="glow-input" value={fullUrl} style={{ fontSize: '12px', color: 'var(--accent-cyan)', cursor: 'pointer' }} onClick={() => navigator.clipboard.writeText(fullUrl)} />
+                                <button className="btn-neon" style={{ padding: '8px 16px', fontSize: '12px', whiteSpace: 'nowrap' }} onClick={() => {
+                                  navigator.clipboard.writeText(fullUrl);
+                                  setSuccessAlert('Public Trial Link copied to clipboard!');
+                                }}>📋 Copy Link</button>
+                              </div>
+
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '4px' }}>
+                                <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Created: {portal.created_at}</span>
+                                <div style={{ display: 'flex', gap: '10px' }}>
+                                  <button className="btn-neon btn-neon-red" style={{ padding: '6px 12px', fontSize: '11px' }} onClick={() => handleResetFreePortalClaims(portal.id)}>
+                                    🔄 Reset IP Locks & Purge UIDs ({totalClaims})
+                                  </button>
+                                  <button className="btn-neon" style={{ padding: '6px 12px', fontSize: '11px', background: 'transparent', border: '1px solid var(--border-glass)', color: 'var(--text-muted)' }} onClick={() => handleDeleteFreePortal(portal.id)}>
+                                    🗑️ Delete Link
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
               {/* TAB CONTENT: System Config (.env) */}
               {isMasterState && activeTab === 'system' && (
                 <div className="glass-card">
@@ -2932,13 +3308,13 @@ axios.post('${typeof window !== 'undefined' ? window.location.origin : 'https://
                 </div>
               )}
 
-
             </div>
           )}
 
         </main>
       </div>
-
+        </>
+      )}
     </div>
   );
 }

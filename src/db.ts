@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import crypto from 'crypto';
 import { config } from './config';
 
 export interface UidInfo {
@@ -15,6 +16,8 @@ export interface BotConfig {
   is_active: boolean;
   suspended_reason?: string;
   owner_id?: string;
+  bot_name?: string;
+  bot_avatar?: string;
 }
 
 export interface ApiKeyInfo {
@@ -53,6 +56,19 @@ export interface ChatMessage {
   user_id: string;
 }
 
+export interface FreePortal {
+  id: string;
+  owner_id: string;
+  api_key: string;
+  title: string;
+  days: number;
+  max_claims: number;
+  claimed_ips: Record<string, { uid: string; claimed_at: string }>;
+  claimed_uids: Record<string, { ip: string; claimed_at: string }>;
+  created_at: string;
+  is_active: boolean;
+}
+
 export interface DatabaseSchema {
   resellers: (string | number)[];
   whitelisted_channels: (string | number)[];
@@ -68,6 +84,7 @@ export interface DatabaseSchema {
   lockdown?: { active: boolean; reason: string };
   user_names_cache?: Record<string, string>;
   chat_messages?: ChatMessage[];
+  free_portals?: Record<string, FreePortal>;
 }
 
 const defaultDb = (): DatabaseSchema => ({
@@ -434,6 +451,141 @@ export function claimGiftVoucher(userId: string | number, code: string): { succe
   
   saveDb(db);
   return { success: true, amount, days: vData.days || 0 };
+}
+
+// Master Admin & Reseller Free Portal Trial System
+export function createFreePortal(
+  apiKey: string,
+  ownerId: string,
+  title: string,
+  days: number = 1,
+  maxClaims: number = 0
+): FreePortal {
+  const db = loadDb();
+  if (!db.free_portals) db.free_portals = {};
+
+  const portalId = `portal_${crypto.randomBytes(4).toString('hex')}`;
+  const portal: FreePortal = {
+    id: portalId,
+    owner_id: String(ownerId),
+    api_key: apiKey,
+    title: title.trim() || 'Complimentary Free Trial Bypass Portal',
+    days: days > 0 ? days : 1,
+    max_claims: maxClaims >= 0 ? maxClaims : 0,
+    claimed_ips: {},
+    claimed_uids: {},
+    created_at: new Date().toLocaleString(),
+    is_active: true
+  };
+
+  db.free_portals[portalId] = portal;
+  saveDb(db);
+  return portal;
+}
+
+export function getFreePortal(portalId: string): FreePortal | null {
+  const db = loadDb();
+  return db.free_portals?.[portalId] || null;
+}
+
+export function claimFreePortalUid(
+  portalId: string,
+  ip: string,
+  uid: string
+): { success: boolean; message: string } {
+  const db = loadDb();
+  if (!db.free_portals || !db.free_portals[portalId]) {
+    return { success: false, message: 'Free trial portal not found or invalid.' };
+  }
+
+  const portal = db.free_portals[portalId];
+  if (!portal.is_active) {
+    return { success: false, message: 'This free trial portal is currently disabled.' };
+  }
+
+  const cleanIp = ip.split(',')[0].trim();
+
+  if (portal.claimed_ips && portal.claimed_ips[cleanIp]) {
+    const existing = portal.claimed_ips[cleanIp];
+    return {
+      success: false,
+      message: `Your IP address has already claimed a trial UID (${existing.uid}). Only 1 claim allowed per IP.`
+    };
+  }
+
+  const totalClaims = Object.keys(portal.claimed_ips || {}).length;
+  if (portal.max_claims > 0 && totalClaims >= portal.max_claims) {
+    return { success: false, message: 'This free trial portal has reached its maximum claim capacity.' };
+  }
+
+  // Whitelist the UID under the reseller's API key
+  const added = addKeyUid(portal.api_key, uid, portal.days);
+  if (!added) {
+    return { success: false, message: 'Failed to record UID to whitelisting engine.' };
+  }
+
+  const timestamp = new Date().toLocaleString();
+  if (!portal.claimed_ips) portal.claimed_ips = {};
+  if (!portal.claimed_uids) portal.claimed_uids = {};
+
+  portal.claimed_ips[cleanIp] = { uid, claimed_at: timestamp };
+  portal.claimed_uids[uid] = { ip: cleanIp, claimed_at: timestamp };
+
+  saveDb(db);
+
+  addActivityLog(0, portal.owner_id, 'FREE_CLAIM', uid, {
+    portal_id: portalId,
+    ip: cleanIp,
+    days: portal.days
+  });
+
+  return { success: true, message: `Successfully whitelisted UID ${uid} for ${portal.days} day(s)!` };
+}
+
+export function resetFreePortalClaims(
+  portalId: string,
+  ownerId?: string
+): { success: boolean; count: number } {
+  const db = loadDb();
+  if (!db.free_portals || !db.free_portals[portalId]) {
+    return { success: false, count: 0 };
+  }
+
+  const portal = db.free_portals[portalId];
+  if (ownerId && ownerId !== config.masterAdminId && String(portal.owner_id) !== String(ownerId)) {
+    return { success: false, count: 0 };
+  }
+
+  const uidsToRemove = Object.keys(portal.claimed_uids || {});
+  const count = uidsToRemove.length;
+
+  // Remove UIDs from reseller's key
+  if (db.api_keys && db.api_keys[portal.api_key] && db.api_keys[portal.api_key].uids) {
+    uidsToRemove.forEach(uid => {
+      delete db.api_keys[portal.api_key].uids![uid];
+    });
+  }
+
+  // Clear portal IP & UID locks
+  portal.claimed_ips = {};
+  portal.claimed_uids = {};
+
+  saveDb(db);
+  return { success: true, count };
+}
+
+export function deleteFreePortal(portalId: string, ownerId?: string): boolean {
+  const db = loadDb();
+  if (!db.free_portals || !db.free_portals[portalId]) return false;
+
+  const portal = db.free_portals[portalId];
+  if (ownerId && ownerId !== config.masterAdminId && String(portal.owner_id) !== String(ownerId)) {
+    return false;
+  }
+
+  delete db.free_portals[portalId];
+  saveDb(db);
+  return true;
 }
 
 // Master Admin panel controls

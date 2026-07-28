@@ -53,7 +53,19 @@ export class BotManager {
     return new Promise((resolve) => {
       let isResolved = false;
 
-      client.once('ready', () => {
+      client.once('ready', async () => {
+        const liveDb = db.loadDb();
+        const resObj = liveDb.api_keys[apiKey];
+        const customName = resObj?.bot_config?.bot_name || resObj?.username || resObj?.displayName;
+        const customAvatar = resObj?.bot_config?.bot_avatar || resObj?.avatar;
+
+        if (customName && client.user) {
+          client.user.setUsername(customName).catch(() => {});
+        }
+        if (customAvatar && client.user) {
+          client.user.setAvatar(customAvatar).catch(() => {});
+        }
+
         this.addLog(apiKey, `[SUCCESS] Logged in as ${client.user?.tag}`);
         this.addLog(apiKey, `[INFO] Server (Guild ID) target: "${guildId}"`);
         this.addLog(apiKey, `[INFO] Whitelist Audit channel (Channel ID): "${channelId}"`);
@@ -105,7 +117,8 @@ export class BotManager {
         // --- COMMAND HANDLERS ---
 
         if (command === 'help') {
-          let helpMsg = `🛡️ **MANI272 Bypass Bot Manual**\n\n` +
+          const customBrand = reseller?.username || reseller?.displayName || 'Reseller Bypass Suite';
+          let helpMsg = `🛡️ **${customBrand} Whitelist Bot Manual**\n\n` +
             `• \`!add <uid> [days]\` - Whitelist a new UID node\n` +
             `• \`!remove <uid>\` - Terminate/Remove UID node\n` +
             `• \`!replace <old_uid> <new_uid>\` - Migrate UID to new node\n` +

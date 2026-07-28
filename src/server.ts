@@ -649,6 +649,146 @@ app.post('/api/admin/reset-claims', async (req: Request, res: Response) => {
   }
 });
 
+// --- FREE PORTAL TRIAL SYSTEM ROUTES ---
+
+// Create Free Trial Portal Link
+app.post('/api/free-portal/create', (req: Request, res: Response) => {
+  const apiKey = req.headers['x-api-key'] as string;
+  const { title, days, maxClaims } = req.body;
+
+  if (!apiKey) return res.status(401).json({ error: 'API key is required' });
+
+  const isMasterKey = db.isMaster(apiKey);
+  const keyInfo = db.getApiKeyInfo(apiKey);
+
+  if (!isMasterKey && !keyInfo) return res.status(401).json({ error: 'Unauthorized API key' });
+
+  const ownerId = isMasterKey ? config.masterAdminId : keyInfo?.owner_id || 'unknown';
+  const numDays = parseInt(days || '1', 10);
+  const numMaxClaims = parseInt(maxClaims || '0', 10);
+
+  const portal = db.createFreePortal(apiKey, String(ownerId), title || '', numDays, numMaxClaims);
+
+  res.json({
+    success: true,
+    portal,
+    claimUrl: `/free-claim/${portal.id}`
+  });
+});
+
+// Get List of Free Portals
+app.get('/api/free-portal/list', (req: Request, res: Response) => {
+  const apiKey = req.headers['x-api-key'] as string;
+  if (!apiKey) return res.status(401).json({ error: 'API key is required' });
+
+  const isMasterKey = db.isMaster(apiKey);
+  const keyInfo = db.getApiKeyInfo(apiKey);
+
+  if (!isMasterKey && !keyInfo) return res.status(401).json({ error: 'Unauthorized API key' });
+
+  const database = db.loadDb();
+  const portals = database.free_portals || {};
+  const ownerId = String(isMasterKey ? config.masterAdminId : keyInfo?.owner_id);
+
+  const filtered = Object.values(portals).filter(p => isMasterKey || String(p.owner_id) === ownerId);
+
+  res.json({
+    success: true,
+    portals: filtered
+  });
+});
+
+// Public info for a Free Trial Portal
+app.get('/api/free-portal/info/:id', (req: Request, res: Response) => {
+  const { id } = req.params;
+  const portal = db.getFreePortal(id);
+
+  if (!portal || !portal.is_active) {
+    return res.status(404).json({ error: 'Free trial portal not found or inactive' });
+  }
+
+  const database = db.loadDb();
+  let hostName = 'System Administrator';
+  if (portal.owner_id !== config.masterAdminId && database.api_keys[portal.api_key]) {
+    hostName = database.api_keys[portal.api_key].username || `Reseller_${portal.owner_id}`;
+  }
+
+  const totalClaims = Object.keys(portal.claimed_ips || {}).length;
+
+  res.json({
+    success: true,
+    id: portal.id,
+    title: portal.title,
+    hostName,
+    days: portal.days,
+    maxClaims: portal.max_claims,
+    totalClaims,
+    created_at: portal.created_at
+  });
+});
+
+// Public Claim UID Route
+app.post('/api/free-portal/claim', (req: Request, res: Response) => {
+  const { portalId, uid } = req.body;
+  if (!portalId || !uid || !uid.trim()) {
+    return res.status(400).json({ error: 'Portal ID and target UID are required' });
+  }
+
+  const clientIp = (req.headers['x-forwarded-for'] as string || req.ip || '127.0.0.1').split(',')[0].trim();
+  const result = db.claimFreePortalUid(portalId.trim(), clientIp, uid.trim());
+
+  if (result.success) {
+    res.json({ success: true, message: result.message });
+  } else {
+    res.status(400).json({ error: result.message });
+  }
+});
+
+// Reset Free Portal IP Locks & Purge Claimed UIDs
+app.post('/api/free-portal/reset/:id', (req: Request, res: Response) => {
+  const apiKey = req.headers['x-api-key'] as string;
+  const { id } = req.params;
+
+  if (!apiKey) return res.status(401).json({ error: 'API key is required' });
+
+  const isMasterKey = db.isMaster(apiKey);
+  const keyInfo = db.getApiKeyInfo(apiKey);
+
+  if (!isMasterKey && !keyInfo) return res.status(401).json({ error: 'Unauthorized API key' });
+
+  const ownerId = isMasterKey ? config.masterAdminId : keyInfo?.owner_id;
+  const result = db.resetFreePortalClaims(id, String(ownerId));
+
+  if (result.success) {
+    db.addActivityLog(0, String(ownerId), 'RESET_FREE_PORTAL', id, { purged_uids_count: result.count });
+    res.json({ success: true, message: `Portal IP locks reset and ${result.count} trial UIDs purged!` });
+  } else {
+    res.status(400).json({ error: 'Failed to reset free portal claims.' });
+  }
+});
+
+// Delete Free Portal Link
+app.delete('/api/free-portal/:id', (req: Request, res: Response) => {
+  const apiKey = req.headers['x-api-key'] as string;
+  const { id } = req.params;
+
+  if (!apiKey) return res.status(401).json({ error: 'API key is required' });
+
+  const isMasterKey = db.isMaster(apiKey);
+  const keyInfo = db.getApiKeyInfo(apiKey);
+
+  if (!isMasterKey && !keyInfo) return res.status(401).json({ error: 'Unauthorized API key' });
+
+  const ownerId = isMasterKey ? config.masterAdminId : keyInfo?.owner_id;
+  const deleted = db.deleteFreePortal(id, String(ownerId));
+
+  if (deleted) {
+    res.json({ success: true, message: 'Free trial portal deleted.' });
+  } else {
+    res.status(400).json({ error: 'Failed to delete portal.' });
+  }
+});
+
 // Update Environment Configuration Variables
 app.post('/api/admin/env', (req: Request, res: Response) => {
   const { upstreamKey, baseUrl, webhookUrl, prefix, brand } = req.body;
@@ -737,7 +877,7 @@ app.get('/api/bot/logs', (req: Request, res: Response) => {
 
 app.post('/api/bot/deploy', async (req: Request, res: Response) => {
   const apiKey = req.headers['x-api-key'] as string;
-  const { botToken, guildId, channelId, ownerId } = req.body;
+  const { botToken, guildId, channelId, ownerId, botName, botAvatar } = req.body;
 
   if (!apiKey) return res.status(401).json({ error: 'API key is required' });
   if (!botToken || !guildId || !channelId) {
@@ -760,7 +900,9 @@ app.post('/api/bot/deploy', async (req: Request, res: Response) => {
     guild_id: guildId.trim(),
     channel_id: channelId.trim(),
     is_active: true,
-    owner_id: ownerId ? String(ownerId).trim() : String(reseller.owner_id)
+    owner_id: ownerId ? String(ownerId).trim() : String(reseller.owner_id),
+    bot_name: botName ? String(botName).trim() : undefined,
+    bot_avatar: botAvatar ? String(botAvatar).trim() : undefined
   };
   delete reseller.bot_config.suspended_reason;
 
